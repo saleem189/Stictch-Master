@@ -5,7 +5,7 @@ import NewOrderForm from '../components/NewOrderForm';
 import PaymentModal from '../components/PaymentModal';
 import { addDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Order, OrderWorkflowStatus } from '../types';
+import { Order } from '../types';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
@@ -13,7 +13,6 @@ import OrderDetailsModal from '../components/OrderDetailsModal';
 
 export default function Orders() {
   const { t } = useTranslation();
-  const { profile } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);

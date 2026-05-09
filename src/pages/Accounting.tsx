@@ -114,7 +114,7 @@ export default function Accounting() {
          ].map((tab) => (
            <button
              key={tab.id}
-             onClick={() => setActiveTab(tab.id as any)}
+             onClick={() => setActiveTab(tab.id as 'ledger' | 'documents' | 'automations')}
              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'
              }`}

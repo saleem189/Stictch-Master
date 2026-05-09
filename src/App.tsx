@@ -139,9 +139,9 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900 border-t-2 border-indigo-600">
+    <div id="admin-layout" className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900 border-t-2 border-indigo-600">
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-slate-200">
+      <aside id="sidebar-desktop" className="hidden lg:flex flex-col w-64 shrink-0 border-r border-slate-200">
         <SidebarContent />
       </aside>
 
@@ -150,6 +150,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
         {isSidebarOpen && (
           <>
             <motion.div 
+              id="sidebar-overlay"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -157,6 +158,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
               className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden"
             />
             <motion.aside 
+              id="sidebar-mobile"
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
@@ -170,8 +172,8 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0 z-30 sticky top-0">
+      <div id="main-content-wrapper" className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <header id="main-header" className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0 z-30 sticky top-0">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -291,18 +293,18 @@ function AppContent() {
         user ? (
           <AdminLayout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/clients" element={<Clients />} />
-              <Route path="/appointments" element={<Appointments />} />
-              <Route path="/inventory" element={<Inventory />} />
+              <Route index element={<Dashboard />} />
+              <Route path="orders" element={<Orders />} />
+              <Route path="clients" element={<Clients />} />
+              <Route path="appointments" element={<Appointments />} />
+              <Route path="inventory" element={<Inventory />} />
               
               {/* Restricted Admin only routes */}
-              <Route path="/vendors" element={isAdmin ? <Vendors /> : <Navigate to="/admin" />} />
-              <Route path="/accounting" element={isAdmin ? <Accounting /> : <Navigate to="/admin" />} />
-              <Route path="/employees" element={isAdmin ? <Employees /> : <Navigate to="/admin" />} />
-              <Route path="/branches" element={isAdmin ? <Branches /> : <Navigate to="/admin" />} />
-              <Route path="/profile" element={<Profile />} />
+              <Route path="vendors" element={isAdmin ? <Vendors /> : <Navigate to="/admin" />} />
+              <Route path="accounting" element={isAdmin ? <Accounting /> : <Navigate to="/admin" />} />
+              <Route path="employees" element={isAdmin ? <Employees /> : <Navigate to="/admin" />} />
+              <Route path="branches" element={isAdmin ? <Branches /> : <Navigate to="/admin" />} />
+              <Route path="profile" element={<Profile />} />
               
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Routes>

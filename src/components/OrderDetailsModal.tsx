@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { collection, addDoc, getDocs, doc, increment, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order, OrderItem, OrderWorkflowStatus, Account } from '../types';
-import { X, Save, Clock, User, CheckCircle2, AlertCircle, Scissors, Edit3, Truck, Archive, Info, Ruler, DollarSign } from 'lucide-react';
+import { X, Save, Clock, User, CheckCircle2, Scissors, Edit3, Truck, Archive, Info, Ruler, DollarSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
@@ -81,7 +81,7 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
       const revenueAcc = accounts.find(a => a.type === 'revenue' || a.name.toLowerCase().includes('sales'));
 
       if (assetAcc && revenueAcc) {
-         const txnRef = await addDoc(collection(db, 'transactions'), {
+         await addDoc(collection(db, 'transactions'), {
            date: new Date().toISOString().split('T')[0],
            description: `Order Payment: ${order.clientName} (Order #${order.id.slice(0, 8)})`,
            amount: paymentAmount,
@@ -172,16 +172,16 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
 
         <main className="flex-1 overflow-y-auto p-8 space-y-10 scrollbar-hide">
           <div className="flex bg-slate-100 p-1 rounded-2xl mb-8">
-             {['workflow', 'financials', 'audit'].map((t) => (
-               <button
-                 key={t}
-                 onClick={() => setActiveTab(t as any)}
-                 className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                   activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-500'
-                 }`}
-               >
-                 {t}
-               </button>
+             {['workflow', 'financials', 'audit'].map((t: string) => (
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t as 'workflow' | 'financials' | 'audit')}
+                  className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-500'
+                  }`}
+                >
+                  {t}
+                </button>
              ))}
           </div>
 

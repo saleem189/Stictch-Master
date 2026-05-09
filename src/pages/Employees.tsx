@@ -19,6 +19,7 @@ export default function Employees() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'roster' | 'tasks' | 'access' | 'history'>('roster');
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
+  const [processingPayroll, setProcessingPayroll] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | undefined>();
 
@@ -49,9 +50,11 @@ export default function Employees() {
   }
 
   const handleBulkPayroll = async () => {
+    if (processingPayroll) return;
     if (!confirm(`Are you sure you want to process monthly payroll for ${employees.length} employees?`)) return;
     
     setProcessingPayroll(true);
+    const tid = toast.loading('Calculating and distributing remuneration...');
     try {
       const expenseAcc = accounts.find(a => a.type === 'expense');
       const assetAcc = accounts.find(a => a.type === 'asset' && a.name.toLowerCase().includes('cash'));
@@ -72,17 +75,34 @@ export default function Employees() {
           amount: emp.salary,
           debitAccountId: expenseAcc.id,
           creditAccountId: assetAcc.id,
+          type: 'payroll',
           reference: emp.id
         });
 
         // Update Account Balances
         await updateDoc(doc(db, 'accounts', expenseAcc.id), { balance: increment(emp.salary) });
         await updateDoc(doc(db, 'accounts', assetAcc.id), { balance: increment(-emp.salary) });
+        
+        // Create Payroll Record
+        await addDoc(collection(db, 'payrollRecords'), {
+          employeeId: emp.id,
+          employeeName: emp.name,
+          month: monthYear,
+          baseSalary: emp.salary,
+          bonuses: [],
+          deductions: [],
+          netSalary: emp.salary,
+          status: 'paid',
+          payoutDate: today,
+          createdAt: new Date().toISOString()
+        });
       }
 
-      toast.success(`Payroll processed for ${employees.length} employees totaling Rs. ${employees.reduce((acc, e) => acc + e.salary, 0).toLocaleString()}`);
+      toast.success(`Payroll processed for ${employees.length} employees totaling Rs. ${employees.reduce((acc, e) => acc + e.salary, 0).toLocaleString()}`, { id: tid });
+      fetchData();
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'payroll');
+      toast.error('Financial sync failed during payroll.', { id: tid });
     } finally {
       setProcessingPayroll(false);
     }
@@ -136,10 +156,18 @@ export default function Employees() {
           </div>
           <button 
             onClick={() => setIsPayrollModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-100"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all shadow-sm"
+          >
+            <Clock size={14} />
+            {t('Manual Payroll')}
+          </button>
+          <button 
+            onClick={handleBulkPayroll}
+            disabled={processingPayroll}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-100 disabled:opacity-50"
           >
             <Zap size={14} />
-            {t('Prepare Monthly Payroll')}
+            {processingPayroll ? 'Processing...' : 'Bulk Payroll Payout'}
           </button>
           <div className="flex bg-slate-100 p-1.5 rounded-2xl overflow-x-auto">
            <button 

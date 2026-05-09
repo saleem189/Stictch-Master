@@ -2,16 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Branch } from '../types';
-import { MapPin, Plus, Save, X, Phone, User, Settings, Info, Building2, Globe } from 'lucide-react';
+import { MapPin, Plus, X, Phone, User, Settings, Building2, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
 
 export default function Branches() {
   const { t } = useTranslation();
-  const { profile, isAdmin } = useUser();
+  const { isAdmin } = useUser();
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
 

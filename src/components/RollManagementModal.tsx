@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { InventoryItem, FabricRoll, InventoryLog } from '../types';
-import { X, Plus, Save, Ruler, Trash2, History, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Plus, Ruler, History, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
@@ -15,7 +15,6 @@ interface Props {
 }
 
 export default function RollManagementModal({ isOpen, onClose, item, onSuccess }: Props) {
-  const { t } = useTranslation();
   const { profile } = useUser();
   const [rolls, setRolls] = useState<FabricRoll[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, orderBy, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Appointment, Client, Employee } from '../types';
-import { Calendar, Plus, Clock, User, Scissors, CheckCircle2, XCircle, AlertCircle, Search, Filter, Phone, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Plus, Clock, User, Scissors, CheckCircle2, XCircle, AlertCircle, Filter, ChevronLeft, ChevronRight, Info, X, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
@@ -13,7 +13,6 @@ export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 

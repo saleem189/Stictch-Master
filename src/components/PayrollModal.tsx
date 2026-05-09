@@ -16,7 +16,6 @@ interface Props {
 }
 
 export default function PayrollModal({ isOpen, onClose, onSuccess, employees }: Props) {
-  const { t } = useTranslation();
   const { profile } = useUser();
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [records, setRecords] = useState<Partial<PayrollRecord>[]>([]);

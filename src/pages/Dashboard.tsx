@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, limit, orderBy } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { Order, InventoryItem, Transaction } from '../types';
 import { 
   Clock, 
@@ -12,7 +12,9 @@ import {
   ArrowUpRight,
   Sparkles,
   Zap,
-  Download
+  Download,
+  Database,
+  DollarSign
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +24,7 @@ import { processRecurringTransactions } from '../lib/automation';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { exportToCSV } from '../lib/exportUtils';
+import { seedDatabase } from '../lib/seeder';
 
 const QuickAction = ({ icon: Icon, label, color, onClick }: { icon: React.ElementType, label: string, color: string, onClick: () => void }) => (
   <button 
@@ -81,9 +84,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     async function fetchData() {
       try {
+        setLoading(true);
+        setError(null);
         // Run financial automation check
         const automationResult = await processRecurringTransactions();
         if (automationResult.processed && automationResult.processed > 0) {
@@ -100,8 +107,8 @@ export default function Dashboard() {
           getDocs(query(collection(db, 'transactions'), orderBy('date', 'desc')))
         ]);
         
-        const orders = ordersSnap.docs.map(d => d.data() as Order);
-        const transactions = txnSnap.docs.map(d => d.data() as Transaction);
+        const orders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+        const transactions = txnSnap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
         const active = orders.filter(d => d.status !== 'delivered' && d.status !== 'cancelled').length;
         const lowItems = inventorySnap.docs
           .map(d => ({ id: d.id, ...d.data() } as InventoryItem))
@@ -116,15 +123,26 @@ export default function Dashboard() {
         const monthlyRev: Record<string, number> = {};
 
         transactions.forEach(txn => {
-           const txnMonth = txn.date.slice(0, 7);
+           if (!txn.date) return;
+           
+           const txnDateStr = String(txn.date);
+           const txnMonth = txnDateStr.slice(0, 7);
+           
            if (txnMonth === currentMonth) {
               if (txn.type === 'sale') revenue += txn.amount;
               if (txn.type === 'payroll') payroll += txn.amount;
            }
            
-           const monthName = new Date(txn.date).toLocaleString('default', { month: 'short' });
-           if (txn.type === 'sale') {
-              monthlyRev[monthName] = (monthlyRev[monthName] || 0) + txn.amount;
+           try {
+             const dateObj = new Date(txnDateStr);
+             if (!isNaN(dateObj.getTime())) {
+               const monthName = dateObj.toLocaleString('en-US', { month: 'short' });
+               if (txn.type === 'sale') {
+                  monthlyRev[monthName] = (monthlyRev[monthName] || 0) + txn.amount;
+               }
+             }
+           } catch {
+             console.warn('Invalid transaction date:', txn.date);
            }
         });
 
@@ -135,7 +153,11 @@ export default function Dashboard() {
         });
 
         const revEntries = Object.entries(monthlyRev).map(([name, r]) => ({ name, revenue: r }));
-        setRevenueData(revEntries.slice(-6));
+        const sortedRevEntries = revEntries.slice(-6).sort((a, b) => {
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return months.indexOf(a.name) - months.indexOf(b.name);
+        });
+        setRevenueData(sortedRevEntries);
 
         setStats({
           activeOrders: active,
@@ -149,16 +171,11 @@ export default function Dashboard() {
 
         // Advanced Analytics: Workflow Distribution (Item-based)
         const itemStages: Record<string, number> = {};
-        const employeeLoad: Record<string, number> = {};
 
         orders.forEach(o => {
           (o.items || []).forEach(item => {
             const s = item.status || 'pending';
             itemStages[s] = (itemStages[s] || 0) + 1;
-            
-            if (o.assignedTo) {
-              employeeLoad[o.assignedTo] = (employeeLoad[o.assignedTo] || 0) + 1;
-            }
           });
         });
 
@@ -173,17 +190,20 @@ export default function Dashboard() {
           'delivered': '#10b981'
         };
 
-        setChartData(Object.entries(itemStages).map(([name, count]) => ({
+        const chartEntries = Object.entries(itemStages).map(([name, count]) => ({
           name: name.replace('-', ' '),
           count,
           color: statusColors[name] || '#94a3b8'
-        })).sort((a, b) => b.count - a.count).slice(0, 5));
+        })).sort((a, b) => b.count - a.count).slice(0, 5);
+        
+        setChartData(chartEntries);
 
         const recentQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(10));
         const recentSnap = await getDocs(recentQuery);
         setRecentOrders(recentSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'dashboard_data');
+      } catch {
+        console.error('Dashboard fetch error');
+        setError('Failed to sync shop intelligence. Please check your connection.');
       } finally {
         setLoading(false);
       }
@@ -192,30 +212,68 @@ export default function Dashboard() {
   }, []);
 
   if (loading) return (
-    <div className="h-full flex items-center justify-center">
+    <div className="h-full min-h-[400px] flex items-center justify-center">
        <div className="text-center space-y-4">
          <motion.div 
            animate={{ rotate: 360 }} 
            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
            className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto"
          />
-         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Aggregating Shop Intelligence...</p>
+         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregating Shop Intelligence...</p>
        </div>
     </div>
   );
 
+  if (error) return (
+    <div className="h-full flex items-center justify-center p-8">
+      <div className="bg-red-50 border border-red-100 rounded-[2rem] p-12 text-center max-w-md space-y-6">
+        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+          <AlertTriangle size={32} />
+        </div>
+        <h2 className="text-xl font-black text-slate-900 uppercase">System Sync Failure</h2>
+        <p className="text-sm text-slate-500 font-medium leading-relaxed">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-lg"
+        >
+          Try Manual Sync
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="p-4 sm:p-8 space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <div id="dashboard-container" className="p-4 sm:p-8 space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div id="dashboard-header" className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{t('Intelligence Dashboard')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight italic uppercase">{t('Intelligence Dashboard')}</h1>
           <p className="text-sm sm:text-base text-slate-500 font-medium">
             {t('Intelligence Dashboard Subtitle', { count: stats.activeOrders })}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
+        <div id="dashboard-header-actions" className="flex flex-wrap items-center gap-4">
            <button 
+             id="btn-seed-data"
+             onClick={async () => {
+               if(confirm('This will populate the database with sample data. Continue?')) {
+                 const tid = toast.loading('Seeding intelligence matrix...');
+                 try {
+                   await seedDatabase();
+                   toast.success('Database seeded successfully!', { id: tid });
+                   window.location.reload();
+                 } catch {
+                   toast.error('Seeding failed. Check console.', { id: tid });
+                 }
+               }
+             }}
+             className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-100 hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+           >
+              <Database size={18} />
+              Seed Data
+           </button>
+           <button 
+             id="btn-export-summary"
              onClick={() => {
                const data = [
                  { Metric: 'Active Orders', Value: stats.activeOrders },
@@ -231,7 +289,7 @@ export default function Dashboard() {
               <Download size={18} />
               Export Summary
            </button>
-           <button onClick={() => setIsNewOrderOpen(true)} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
+           <button id="btn-live-order" onClick={() => setIsNewOrderOpen(true)} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
              <Zap size={18} />
              {t('Live Order Entry')}
            </button>
@@ -239,7 +297,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions Scroll */}
-      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div id="quick-actions-bar" className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
         <QuickAction icon={ShoppingBag} label={t('Catalog')} color="bg-indigo-600" onClick={() => navigate('/admin/inventory')} />
         <QuickAction icon={Users} label={t('Clients')} color="bg-slate-900" onClick={() => navigate('/admin/clients')} />
         <QuickAction icon={TrendingUp} label={t('Reports')} color="bg-blue-600" onClick={() => navigate('/admin/accounting')} />
@@ -248,16 +306,16 @@ export default function Dashboard() {
       </div>
 
       {/* Grid of Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div id="stats-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <StatCard title={t('Cash Inflow (MTD)')} value={`Rs. ${stats.monthlyRevenue.toLocaleString()}`} trend={15} trendLabel="+15% vs LY" icon={TrendingUp} color="bg-green-600" />
         <StatCard title={t('Payroll Load')} value={`Rs. ${stats.monthlyPayroll.toLocaleString()}`} trend={5} trendLabel="Salaries + Bonuses" icon={Users} color="bg-indigo-600" />
         <StatCard title={t('Accounts Receivable')} value={`Rs. ${stats.receivables.toLocaleString()}`} trendLabel="Outstanding Balances" icon={DollarSign} color="bg-amber-600" />
         <StatCard title={t('Workload')} value={`${stats.activeOrders} Orders`} trendLabel="Active Pipeline" icon={ShoppingBag} color="bg-blue-600" />
       </div>
 
-      <div className="grid grid-cols-12 gap-6 sm:gap-8">
+      <div id="charts-and-alerts-grid" className="grid grid-cols-12 gap-6 sm:gap-8">
         {/* Workflow Distribution Chart */}
-        <div className="col-span-12 lg:col-span-12 xl:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-8 flex flex-col min-h-[400px]">
+        <div id="workflow-chart-container" className="col-span-12 lg:col-span-12 xl:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-8 flex flex-col min-h-[400px]">
            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
               <div>
                 <h2 className="text-xl font-black text-slate-900">{t('Workflow Distribution')}</h2>
@@ -364,9 +422,20 @@ export default function Dashboard() {
                  </div>
                </div>
                
-               <button className="w-full py-4 bg-indigo-600 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-900/40 transition-all flex items-center justify-center gap-2">
-                 Resolve All Issues <ArrowUpRight size={16} />
-               </button>
+            <button 
+              id="btn-resolve-issues"
+              onClick={() => {
+                if (stats.lowStock > 0) {
+                  navigate('/admin/inventory');
+                  toast('Redirecting to inventory to resolve stock issues.', { icon: '📦' });
+                } else {
+                  toast.success('No critical operational issues detected.');
+                }
+              }}
+              className="w-full py-4 bg-indigo-600 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-900/40 transition-all flex items-center justify-center gap-2"
+            >
+              Resolve All Issues <ArrowUpRight size={16} />
+            </button>
              </div>
              {/* Decorative Background Element */}
              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl -mr-32 -mt-32" />
@@ -375,7 +444,12 @@ export default function Dashboard() {
            <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Recent Activity</h3>
-                <button className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:underline">View All</button>
+                <button 
+                  onClick={() => navigate('/admin/orders')}
+                  className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:underline"
+                >
+                  View All
+                </button>
               </div>
               <div className="space-y-6">
                 {recentOrders.map(order => (
