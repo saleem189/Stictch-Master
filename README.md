@@ -1,20 +1,43 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Tailoring Empire ERP
 
-# Run and deploy your AI Studio app
+A sophisticated, bilingual (English/Urdu) Enterprise Resource Planning system built for modern tailoring businesses.
 
-This contains everything you need to run your app locally.
+## 🚀 Features
 
-View your app in AI Studio: https://ai.studio/apps/640cf21e-771d-4408-a0ac-c495d9a1408f
+- **Intelligence Dashboard**: Real-time business overview and live tracking.
+- **Client Management**: Comprehensive measurement logs and customer history.
+- **Operations & Staff**: Employee performance tracking, role-based access, and payroll management.
+- **Inventory Control**: Real-time monitoring of fabrics, threads, and supplies.
+- **Financial Ledger**: Double-entry accounting with automated reports.
+- **Bilingual Interface**: Seamless switching between English and Urdu with full RTL support.
 
-## Run Locally
+## 🛠 Tech Stack
 
-**Prerequisites:**  Node.js
+- **Frontend**: React, Vite, Tailwind CSS, Framer Motion
+- **Backend/DB**: Firebase Auth & Firestore
+- **State Management**: React Context API
+- **Internationalization**: i18next
 
+## 📖 Documentation
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+For detailed information, please refer to:
+- [**Technical Docs**](./TECHNICAL_DOCS.md): Architecture, Data Models, and Coding Standards.
+- [**Agent Instructions**](./AGENTS.md): Context and rules for AI agents working on this project.
+
+## 🚦 Getting Started
+
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+2. **Run Development Server**:
+   ```bash
+   npm run dev
+   ```
+3. **Build for Production**:
+   ```bash
+   npm run build
+   ```
+
+## 🔐 Security
+The application uses hardened Firestore Security Rules. Ensure `firestore.rules` is updated and deployed whenever the data schema changes.

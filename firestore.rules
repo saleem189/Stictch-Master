@@ -34,7 +34,7 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         isSignedIn() && request.auth.uid == userId && 
         existing().role != 'employee' &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'address'])
       );
     }
 
@@ -54,7 +54,8 @@ service cloud.firestore {
     function isValidClient(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.phone is string && data.phone.size() > 0 && data.phone.size() < 20 &&
-             (!('email' in data) || (data.email is string && data.email.size() < 100));
+             (!('email' in data) || (data.email is string && data.email.size() < 100)) &&
+             (!('address' in data) || (data.address is string && data.address.size() < 500));
     }
     match /clients/{clientId} {
       allow get: if isSignedIn() && (request.auth.uid == clientId || isEmployee());
@@ -62,7 +63,7 @@ service cloud.firestore {
       allow create: if isEmployee() && isValidClient(incoming()) &&
                     incoming().keys().hasAll(['name', 'phone']) && incoming().keys().size() >= 2;
       allow update: if isEmployee() && isValidClient(incoming()) &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'measurements', 'createdAt']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'address', 'measurements', 'createdAt']);
     }
 
     // Order Rules
@@ -110,10 +111,16 @@ service cloud.firestore {
     }
 
     // Employee Rules
+    function isValidEmployee(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.role is string &&
+             data.salary is number &&
+             (!('address' in data) || (data.address is string && data.address.size() < 500));
+    }
     match /employees/{empId} {
       allow read: if isEmployee();
-      allow create: if isAdmin() || (isSignedIn() && request.auth.token.email == 'saleemayoub1@gmail.com');
-      allow update: if isAdmin();
+      allow create: if isAdmin() && isValidEmployee(incoming());
+      allow update: if isAdmin() && isValidEmployee(incoming());
     }
 
     // Task Rules
