@@ -19,7 +19,8 @@ export default function InventoryModal({ isOpen, onClose, onSuccess, item }: Inv
     quantity: item?.quantity || 0,
     unit: item?.unit || 'Meters',
     minLevel: item?.minLevel || 5,
-    pricePerUnit: item?.pricePerUnit || 0
+    pricePerUnit: item?.pricePerUnit || 0,
+    isRollTracked: item?.isRollTracked || false
   });
 
   if (!isOpen) return null;
@@ -149,6 +150,20 @@ export default function InventoryModal({ isOpen, onClose, onSuccess, item }: Inv
                   onChange={e => setFormData({...formData, pricePerUnit: parseFloat(e.target.value)})}
                 />
               </div>
+            </div>
+
+            <div className="col-span-2 flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <input 
+                type="checkbox" 
+                id="isRollTracked"
+                className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                checked={formData.isRollTracked}
+                onChange={e => setFormData({...formData, isRollTracked: e.target.checked})}
+              />
+              <label htmlFor="isRollTracked" className="flex-1 text-sm font-bold text-slate-700 cursor-pointer">
+                Enable Detailed Fabric Roll Tracking
+                <span className="block text-[10px] font-normal text-slate-400 normal-case tracking-normal mt-0.5">Track individual rolls, their lengths, and consumption logs.</span>
+              </label>
             </div>
           </div>
 

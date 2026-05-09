@@ -27,27 +27,29 @@ service cloud.firestore {
     function existing() { return resource.data; }
 
     // User Rules
+    function isValidUser(data) {
+      return data.uid is string && (data.role in ['admin', 'employee', 'client']) &&
+             (!('branchId' in data) || data.branchId is string);
+    }
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
       allow update: if isAdmin() || (
         isSignedIn() && request.auth.uid == userId && 
         existing().role != 'employee' &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'address'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'address', 'branchId'])
       );
     }
 
-    // Profile Change Request Rules
-    function isValidProfileRequest(data) {
-      return data.userId is string && data.suggestedChanges is map &&
-             data.status in ['pending', 'approved', 'rejected'];
+    // Measurement Version Rules
+    function isValidMeasurementRecord(data) {
+      return data.clientId is string && data.version is number && 
+             data.measurements is map && data.recordedBy is string;
     }
-    match /profileRequests/{requestId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid && 
-                    isValidProfileRequest(incoming()) && incoming().status == 'pending';
-      allow update: if isAdmin() && isValidProfileRequest(incoming());
+    match /measurements/{recordId} {
+      allow read: if isEmployee();
+      allow create: if isEmployee() && isValidMeasurementRecord(incoming());
     }
 
     // Client Rules
@@ -55,42 +57,118 @@ service cloud.firestore {
       return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.phone is string && data.phone.size() > 0 && data.phone.size() < 20 &&
              (!('email' in data) || (data.email is string && data.email.size() < 100)) &&
-             (!('address' in data) || (data.address is string && data.address.size() < 500));
+             (!('address' in data) || (data.address is string && data.address.size() < 500)) &&
+             (!('householdId' in data) || (data.householdId is string && data.householdId.size() < 128));
     }
     match /clients/{clientId} {
       allow get: if isSignedIn() && (request.auth.uid == clientId || isEmployee());
       allow list: if isEmployee();
-      allow create: if isEmployee() && isValidClient(incoming()) &&
-                    incoming().keys().hasAll(['name', 'phone']) && incoming().keys().size() >= 2;
+      allow create: if isEmployee() && isValidClient(incoming());
       allow update: if isEmployee() && isValidClient(incoming()) &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'address', 'measurements', 'createdAt']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'address', 'measurements', 'createdAt', 'householdId']);
     }
 
     // Order Rules
     function isValidOrder(data) {
-      return data.clientId is string && data.clientId.size() < 100 &&
-             data.status in ['pending', 'cutting', 'stitching', 'finished', 'delivered'] &&
-             data.totalAmount is number && data.totalAmount >= 0;
+      return data.clientId is string && data.branchId is string &&
+             data.status in ['pending', 'in-progress', 'ready', 'delivered', 'cancelled'] &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             data.items is list && data.items.size() > 0;
     }
     match /orders/{orderId} {
-      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
-      allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
-      allow create: if isEmployee() && isValidOrder(incoming()) &&
-                    incoming().keys().hasAll(['clientId', 'status', 'totalAmount']) && incoming().keys().size() >= 3;
-      allow update: if isEmployee() && isValidOrder(incoming()) &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paidAmount', 'items', 'assignedTo', 'dueDate', 'clientName', 'taskStatus', 'createdAt', 'updatedAt']);
+      allow get, list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
+      allow create: if isEmployee() && isValidOrder(incoming());
+      allow update: if isEmployee() && isValidOrder(incoming()) && (
+        // Action: Update Status
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'auditTrail'])) ||
+        // Action: Payment
+        (incoming().diff(existing()).affectedKeys().hasOnly(['paidAmount', 'updatedAt', 'auditTrail'])) ||
+        // Action: Full Update (Admin or Item changes)
+        (isEmployee() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paidAmount', 'items', 'dueDate', 'updatedAt', 'auditTrail', 'advancePayment', 'items']))
+      );
     }
 
-    // Inventory Rules
-    function isValidInventory(data) {
-      return data.name is string && data.quantity is number && data.quantity >= 0;
+    // Inventory & Fabric Roll Rules
+    function isValidFabricRoll(data) {
+      return data.inventoryId is string && data.originalLength is number && 
+             data.remainingLength is number && data.remainingLength <= data.originalLength;
+    }
+    match /fabricRolls/{rollId} {
+      allow read: if isEmployee();
+      allow write: if isEmployee() && isValidFabricRoll(incoming());
     }
     match /inventory/{itemId} {
       allow read: if isEmployee();
-      allow write: if isEmployee() && isValidInventory(incoming());
+      allow write: if isEmployee() && (incoming().name is string && incoming().quantity is number);
+    }
+    match /inventoryLogs/{logId} {
+      allow read: if isEmployee();
+      allow create: if isEmployee();
     }
 
-    // Vendor Rules
+    // Task Rules
+    function isValidTask(data) {
+      return data.employeeId is string && data.orderId is string &&
+             data.type in ['cutting', 'stitching', 'finishing'] &&
+             data.status in ['pending', 'in-progress', 'completed'];
+    }
+    match /tasks/{taskId} {
+      allow read: if isEmployee();
+      allow create: if isAdmin();
+      allow update: if isEmployee() && (
+        (incoming().status != existing().status && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'completedAt', 'startedAt'])) ||
+        isAdmin()
+      );
+    }
+
+    // Employee Rules
+    match /employees/{employeeId} {
+      allow read: if isEmployee();
+      allow write: if isAdmin();
+    }
+
+    // Financial Document Rules
+    function isValidFinDoc(data) {
+      return data.type in ['quotation', 'advance-invoice', 'receipt', 'final-invoice', 'expense', 'payroll', 'refund'] &&
+             data.amount is number && data.amount >= 0;
+    }
+    match /financialDocuments/{docId} {
+      allow read: if isEmployee();
+      allow create: if isEmployee() && isValidFinDoc(incoming());
+      allow update: if isAdmin();
+    }
+
+    // Payroll Record Rules
+    match /payrollRecords/{recordId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create, update: if isAdmin();
+    }
+
+    // Appointment Rules
+    function isValidAppointment(data) {
+      return data.clientId is string && data.type in ['measurement', 'trial', 'fitting', 'delivery', 'consultation'] &&
+             data.status in ['scheduled', 'completed', 'cancelled', 'no-show'] &&
+             data.startTime is string && data.endTime is string;
+    }
+    match /appointments/{apptId} {
+      allow read: if isEmployee() || (isSignedIn() && resource.data.clientId == request.auth.uid);
+      allow create: if isEmployee() && isValidAppointment(incoming());
+      allow update: if isEmployee() && isValidAppointment(incoming());
+    }
+
+    // Audit Log Rules (Strict Create-Only)
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+    }
+
+    // Branch Rules
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Accounting & Vendor Rules
     match /vendors/{vendorId} {
       allow read: if isEmployee();
       allow write: if isAdmin();
@@ -99,37 +177,14 @@ service cloud.firestore {
       allow read: if isEmployee();
       allow write: if isAdmin();
     }
-
-    // Accounting Rules
     match /accounts/{accountId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
     }
     match /transactions/{txnId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() && incoming().debitAccountId != incoming().creditAccountId;
+      allow create: if isAdmin();
     }
-
-    // Employee Rules
-    function isValidEmployee(data) {
-      return data.name is string && data.name.size() > 0 &&
-             data.role is string &&
-             data.salary is number &&
-             (!('address' in data) || (data.address is string && data.address.size() < 500));
-    }
-    match /employees/{empId} {
-      allow read: if isEmployee();
-      allow create: if isAdmin() && isValidEmployee(incoming());
-      allow update: if isAdmin() && isValidEmployee(incoming());
-    }
-
-    // Task Rules
-    match /tasks/{taskId} {
-      allow read: if isEmployee();
-      allow write: if isEmployee();
-    }
-
-    // Payment Rules
     match /payments/{paymentId} {
       allow read: if isAdmin();
       allow create: if isAdmin();
@@ -147,6 +202,18 @@ service cloud.firestore {
     match /recurringTransactions/{txnId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
+    }
+
+    // Household Rules
+    function isValidHousehold(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.phone is string && data.phone.size() > 0 &&
+             data.address is string && data.address.size() > 0;
+    }
+    match /households/{householdId} {
+      allow read: if isEmployee();
+      allow create: if isEmployee() && isValidHousehold(incoming());
+      allow update: if isEmployee() && isValidHousehold(incoming());
     }
   }
 }

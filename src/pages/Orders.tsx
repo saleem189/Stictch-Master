@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, Plus, Filter, MoreVertical, Printer, DollarSign, Bell } from 'lucide-react';
+import { ShoppingBag, Plus, Filter, MoreVertical, Printer, DollarSign, Bell, MessageCircle } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import NewOrderForm from '../components/NewOrderForm';
 import PaymentModal from '../components/PaymentModal';
 import { addDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Order } from '../types';
+import { Order, OrderWorkflowStatus } from '../types';
 import { toast } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { useUser } from '../contexts/UserContext';
+import OrderDetailsModal from '../components/OrderDetailsModal';
 
 export default function Orders() {
+  const { t } = useTranslation();
+  const { profile } = useUser();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<Order | null>(null);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -29,6 +35,105 @@ export default function Orders() {
       setLoading(false);
     }
   }
+
+  const sendWhatsApp = (order: Order) => {
+    const phone = order.clientPhone?.replace(/\D/g, '');
+    const message = `Hello ${order.clientName}! This is Tailoring Empire. Your order #${order.id.slice(0, 8)} status is currently: ${order.status.toUpperCase()}. Total amount: Rs. ${order.totalAmount}. Thank you for choosing us!`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const printInvoice = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const html = `
+      <html>
+        <head>
+          <title>Invoice #${order.id.slice(0, 8)}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+            body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; line-height: 1.5; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+            .logo { font-size: 24px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.025em; }
+            .invoice-info { text-align: right; }
+            .section { margin-top: 40px; }
+            .title { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { text-align: left; background: #f8fafc; padding: 12px; font-size: 10px; font-weight: 900; border-bottom: 1px solid #e2e8f0; }
+            td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+            .totals { margin-top: 40px; text-align: right; }
+            .total-row { display: flex; justify-content: flex-end; gap: 40px; margin-bottom: 8px; }
+            .grand-total { font-size: 20px; font-weight: 900; color: #4f46e5; margin-top: 10px; }
+            .footer { margin-top: 60px; font-size: 10px; text-align: center; color: #94a3b8; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">Tailoring Empire</div>
+            <div class="invoice-info">
+              <div style="font-weight: 900;">INVOICE #${order.id.slice(0, 8)}</div>
+              <div style="color: #64748b; font-size: 12px;">Date: ${new Date(order.createdAt).toLocaleDateString()}</div>
+            </div>
+          </div>
+
+          <div class="section" style="display: grid; grid-template-cols: 1fr 1fr; gap: 40px;">
+            <div>
+              <div class="title">Billed To</div>
+              <div style="font-weight: 900;">${order.clientName}</div>
+              <div style="color: #64748b;">${order.clientPhone || ''}</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="title">Due Date</div>
+              <div style="font-weight: 900;">${order.dueDate}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>ITEMS</th>
+                <th>DESCRIPTION</th>
+                <th style="text-align: right;">PRICE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.items.map(item => `
+                <tr>
+                  <td style="font-weight: 700;">${item.type}</td>
+                  <td style="color: #64748b;">${item.description}</td>
+                  <td style="text-align: right; font-weight: 700;">Rs. ${item.price.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="total-row">
+              <div class="title">Subtotal</div>
+              <div style="font-weight: 700;">Rs. ${order.totalAmount.toLocaleString()}</div>
+            </div>
+            <div class="total-row">
+              <div class="title">Amount Paid</div>
+              <div style="font-weight: 700;">Rs. ${order.paidAmount.toLocaleString()}</div>
+            </div>
+            <div class="total-row grand-total">
+              <div class="title" style="margin-top: 8px;">Remaining Balance</div>
+              <div>Rs. ${(order.totalAmount - order.paidAmount).toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            Thank you for your business. This is a computer generated invoice.
+          </div>
+
+          <script>window.print();</script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   const sendReminder = async (order: Order) => {
     try {
@@ -51,20 +156,20 @@ export default function Orders() {
 
   return (
     <div className="p-4 sm:p-8 space-y-8 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Work Orders</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight italic uppercase">{t('Orders')}</h1>
           <p className="text-sm text-slate-500 font-medium">Manage production pipeline and billing.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
            <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all">
-             <Filter size={16} /> Filter
+             <Filter size={16} /> {t('Filter')}
            </button>
            <button 
              onClick={() => setIsNewOrderOpen(true)}
              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
            >
-             <Plus size={18} /> New order
+             <Plus size={18} /> {t('Add New')}
            </button>
         </div>
       </div>
@@ -103,19 +208,18 @@ export default function Orders() {
                     <div className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-0.5">{order.items.length} items</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex gap-2 justify-center">
-                       {Object.entries(order.taskStatus).map(([task, status]) => (
-                         <div key={task} className="flex flex-col gap-1.5 items-center w-10">
-                            <div className={`w-full h-1.5 rounded-full transition-all relative ${
-                              status === 'completed' ? 'bg-green-500 shadow-sm shadow-green-100' :
-                              status === 'in-progress' ? 'bg-indigo-500 animate-pulse shadow-md shadow-indigo-100' :
-                              'bg-slate-100'
-                            }`} title={task}>
-                               {status === 'in-progress' && <div className="absolute inset-0 bg-white/20 animate-ping rounded-full" />}
-                            </div>
-                            <span className="text-[8px] uppercase text-slate-400 font-black tracking-tighter truncate w-full text-center">{task}</span>
+                    <div className="flex gap-1.5 flex-wrap max-w-[200px]">
+                       {order.items.map((item, idx) => (
+                         <div key={item.id || idx} className="flex flex-col gap-1 items-center">
+                            <div className={`h-1 rounded-full w-8 ${
+                              item.status === 'delivered' ? 'bg-green-500' :
+                              item.status === 'measurement' ? 'bg-slate-200' :
+                              'bg-indigo-500'
+                            }`} title={`${item.type}: ${item.status}`} />
+                            <span className="text-[8px] font-black text-slate-400 uppercase truncate w-8 text-center">{item.type}</span>
                          </div>
                        ))}
+                       {!order.items && <span className="text-slate-300 italic">No items</span>}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -130,6 +234,13 @@ export default function Orders() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                       <button 
+                         onClick={() => sendWhatsApp(order)}
+                         className="p-2 hover:bg-green-50 rounded-xl text-green-600 transition-all active:scale-90" 
+                         title="WhatsApp Client"
+                       >
+                         <MessageCircle size={16} />
+                       </button>
                        {order.paidAmount < order.totalAmount && (
                          <>
                            <button 
@@ -148,10 +259,18 @@ export default function Orders() {
                            </button>
                          </>
                        )}
-                       <button className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-all active:scale-90" title="Print Invoice">
+                       <button 
+                         onClick={() => printInvoice(order)}
+                         className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-all active:scale-90" 
+                         title="Print Invoice"
+                       >
                          <Printer size={16} />
                        </button>
-                       <button className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-all active:scale-90">
+                       <button 
+                         onClick={() => setSelectedOrderDetails(order)}
+                         className="p-2 hover:bg-indigo-50 rounded-xl text-indigo-600 transition-all active:scale-90" 
+                         title="View Details"
+                       >
                          <MoreVertical size={16} />
                        </button>
                     </div>
@@ -182,6 +301,13 @@ export default function Orders() {
             order={selectedOrderForPayment}
             onClose={() => setSelectedOrderForPayment(null)}
             onSuccess={() => { setSelectedOrderForPayment(null); fetchOrders(); }}
+          />
+        )}
+        {selectedOrderDetails && (
+          <OrderDetailsModal 
+            order={selectedOrderDetails}
+            onClose={() => setSelectedOrderDetails(null)}
+            onSuccess={() => { setSelectedOrderDetails(null); fetchOrders(); }}
           />
         )}
       </AnimatePresence>

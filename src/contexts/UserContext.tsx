@@ -35,6 +35,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             uid: u.uid,
             email: u.email || '',
             role: 'admin', // Default to admin for now to let the user use the app
+            permissions: {
+              canEditMeasurements: true,
+              canApprovePayroll: true,
+              canAdjustInventory: true,
+              canDeleteOrders: true,
+              canViewFinancialReports: true,
+              canManageEmployees: true
+            },
             createdAt: new Date().toISOString()
           };
           await setDoc(doc(db, 'users', u.uid), newProfile);

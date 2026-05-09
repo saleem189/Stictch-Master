@@ -57,7 +57,14 @@ const resources = {
       'Total Clients': 'Total Clients',
       'Production': 'Production',
       'Workflow Distribution': 'Workflow Distribution',
-      'Intelligence Dashboard Subtitle': 'Real-time oversight of {{count}} active tailoring operations.'
+      'Intelligence Dashboard Subtitle': 'Real-time oversight of {{count}} active tailoring operations.',
+      'Financial Intelligence': 'Financial Intelligence',
+      'Create Document': 'Create Document',
+      'Add Entry': 'Add Entry',
+      'Payroll History': 'Payroll History',
+      'Run Payroll': 'Run Payroll',
+      'Financials': 'Financials',
+      'Collect Payment': 'Collect Payment'
     }
   },
   ur: {
@@ -114,7 +121,14 @@ const resources = {
       'Total Clients': 'کل گاہکوں',
       'Production': 'پیداوار',
       'Workflow Distribution': 'کام کے بہاؤ کی تقسیم',
-      'Intelligence Dashboard Subtitle': '{{count}} فعال سلائی کے کاموں کی براہ راست نگرانی'
+      'Intelligence Dashboard Subtitle': '{{count}} فعال سلائی کے کاموں کی براہ راست نگرانی',
+      'Financial Intelligence': 'مالیاتی ذہانت',
+      'Create Document': 'دستاویز بنائیں',
+      'Add Entry': 'اندراج شامل کریں',
+      'Payroll History': 'تنخواہ کی تاریخ',
+      'Run Payroll': 'تنخواہ چلائیں',
+      'Financials': 'مالیاتی',
+      'Collect Payment': 'ادائیگی وصول کریں'
     }
   }
 };

@@ -21,6 +21,7 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employee }: 
     salary: employee?.salary || 0,
     phone: employee?.phone || '',
     address: employee?.address || '',
+    email: employee?.email || '',
     joinedAt: employee?.joinedAt || new Date().toISOString().split('T')[0]
   });
 
@@ -112,6 +113,17 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employee }: 
                 className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-indigo-600 font-mono"
                 value={formData.phone}
                 onChange={e => setFormData({...formData, phone: e.target.value})}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1.5">Email (Login Identity)</label>
+              <input 
+                type="email" 
+                placeholder="Linked account email..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-indigo-600 font-bold"
+                value={formData.email}
+                onChange={e => setFormData({...formData, email: e.target.value})}
               />
             </div>
 

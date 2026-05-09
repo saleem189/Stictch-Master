@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, updateDoc, doc, addDoc, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Employee, Task, Account } from '../types';
-import { UserCircle, Phone, Calendar, DollarSign, Plus, Scissors, CheckCircle2, Clock, AlertCircle, Zap, MapPin, Edit2 } from 'lucide-react';
+import { Employee, Task, Account, UserProfile, PayrollRecord } from '../types';
+import { UserCircle, Phone, Calendar, DollarSign, Plus, Scissors, CheckCircle2, Clock, AlertCircle, Zap, MapPin, Edit2, Shield, Lock, Unlock, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import EmployeeModal from '../components/EmployeeModal';
+import PayrollModal from '../components/PayrollModal';
 
 export default function Employees() {
   const { t } = useTranslation();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [payrollHistory, setPayrollHistory] = useState<PayrollRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'roster' | 'tasks'>('roster');
-  const [processingPayroll, setProcessingPayroll] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'roster' | 'tasks' | 'access' | 'history'>('roster');
+  const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | undefined>();
 
@@ -24,12 +28,19 @@ export default function Employees() {
 
   async function fetchData() {
     try {
-      const eSnap = await getDocs(collection(db, 'employees'));
-      const tSnap = await getDocs(collection(db, 'tasks'));
-      const aSnap = await getDocs(collection(db, 'accounts'));
+      const [eSnap, tSnap, aSnap, uSnap, pSnap] = await Promise.all([
+        getDocs(collection(db, 'employees')),
+        getDocs(collection(db, 'tasks')),
+        getDocs(collection(db, 'accounts')),
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'payrollRecords'))
+      ]);
+
       setEmployees(eSnap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
       setTasks(tSnap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
       setAccounts(aSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account)));
+      setUsers(uSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile)));
+      setPayrollHistory(pSnap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollRecord)));
     } catch (e) {
       handleFirestoreError(e, OperationType.GET, 'employees');
     } finally {
@@ -99,6 +110,12 @@ export default function Employees() {
     }
   };
 
+  const filteredEmployees = employees.filter(e => 
+    e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.phone.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="p-4 sm:p-8 space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -107,15 +124,24 @@ export default function Employees() {
           <p className="text-sm text-slate-500 font-medium">Manage workloads and employee performance.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+          <div className="relative">
+             <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+             <input 
+               type="text"
+               placeholder="Search personnel..."
+               className="bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-2 text-[10px] uppercase font-black tracking-widest focus:ring-2 focus:ring-indigo-600 outline-none w-full sm:w-64"
+               value={searchTerm}
+               onChange={e => setSearchTerm(e.target.value)}
+             />
+          </div>
           <button 
-            disabled={processingPayroll}
-            onClick={handleBulkPayroll}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl shadow-slate-100"
+            onClick={() => setIsPayrollModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-100"
           >
-            <Zap size={14} className={processingPayroll ? 'animate-pulse' : ''} />
-            {processingPayroll ? 'Processing...' : 'Run Monthly Payroll'}
+            <Zap size={14} />
+            {t('Prepare Monthly Payroll')}
           </button>
-          <div className="flex bg-slate-100 p-1.5 rounded-2xl">
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl overflow-x-auto">
            <button 
              onClick={() => setActiveTab('roster')}
              className={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'roster' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -128,6 +154,18 @@ export default function Employees() {
            >
              Task board
            </button>
+           <button 
+             onClick={() => setActiveTab('access')}
+             className={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'access' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+           >
+             Access Control
+           </button>
+           <button 
+             onClick={() => setActiveTab('history')}
+             className={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+           >
+             Payroll History
+           </button>
         </div>
       </div>
     </header>
@@ -138,7 +176,7 @@ export default function Employees() {
         </div>
       ) : activeTab === 'roster' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {employees.map(employee => (
+          {filteredEmployees.map(employee => (
             <div key={employee.id} className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all group overflow-hidden relative">
               <div className="absolute top-4 right-4 lg:opacity-0 group-hover:opacity-100 transition-opacity z-10">
                 <button 
@@ -156,6 +194,7 @@ export default function Employees() {
                   <div>
                     <h3 className="font-black text-slate-900 leading-tight">{employee.name}</h3>
                     <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-1">{employee.role}</p>
+                    {employee.email && <p className="text-[9px] font-bold text-slate-400 mt-1">{employee.email}</p>}
                   </div>
                 </div>
                 <div className="text-right">
@@ -197,8 +236,9 @@ export default function Employees() {
             <span className="text-[10px] font-black uppercase tracking-widest">Enlist New Staff</span>
           </button>
         </div>
-      ) : (
+      ) : activeTab === 'tasks' ? (
         <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+           {/* Pipeline UI stays same */}
            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operation Pipeline</span>
               <div className="flex flex-wrap items-center justify-center gap-4">
@@ -217,10 +257,10 @@ export default function Employees() {
              <table className="w-full text-left min-w-[800px]">
                <thead>
                  <tr className="text-[10px] uppercase tracking-widest text-slate-400 font-black bg-slate-50/30 border-b border-slate-100">
-                   <th className="px-6 py-5 font-serif italic normal-case tracking-normal text-xs">Task Activity</th>
-                   <th className="px-6 py-5 font-serif italic normal-case tracking-normal text-xs">Personnel</th>
-                   <th className="px-6 py-5 font-serif italic normal-case tracking-normal text-xs">Order Ref</th>
-                   <th className="px-6 py-5 font-serif italic normal-case tracking-normal text-xs">Lifecycle Status</th>
+                   <th className="px-6 py-5">Task Activity</th>
+                   <th className="px-6 py-5">Personnel</th>
+                   <th className="px-6 py-5">Order Ref</th>
+                   <th className="px-6 py-5">Lifecycle Status</th>
                    <th className="px-6 py-5"></th>
                  </tr>
                </thead>
@@ -230,9 +270,9 @@ export default function Employees() {
                        <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                              <div className={`p-2.5 rounded-xl transition-transform group-hover:scale-110 ${
-                               task.type === 'cutting' ? 'bg-orange-50 text-orange-600 shadow-sm shadow-orange-100' :
-                               task.type === 'stitching' ? 'bg-indigo-50 text-indigo-600 shadow-sm shadow-indigo-100' :
-                               'bg-green-50 text-green-600 shadow-sm shadow-green-100'
+                               task.type === 'cutting' ? 'bg-orange-50 text-orange-600' :
+                               task.type === 'stitching' ? 'bg-indigo-50 text-indigo-600' :
+                               'bg-green-50 text-green-600'
                              }`}>
                                <Scissors size={14} />
                              </div>
@@ -261,26 +301,100 @@ export default function Employees() {
                              {task.status === 'in-progress' && (
                                <button onClick={() => updateTaskStatus(task.id, 'completed')} className="px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-green-700 shadow-lg shadow-green-100 transition-all active:scale-95">Complete</button>
                              )}
-                             {task.status === 'completed' && (
-                               <span className="text-[10px] text-slate-300 font-black uppercase italic tracking-widest px-4 py-2 bg-slate-50 rounded-xl">Finalized</span>
-                             )}
                           </div>
                        </td>
                     </tr>
                   ))}
-                  {!loading && tasks.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-24 text-center">
-                        <div className="flex flex-col items-center justify-center text-slate-300">
-                          <Scissors size={48} strokeWidth={1} className="mb-4 opacity-20 rotate-45" />
-                          <p className="font-black text-[10px] uppercase tracking-widest">Operation Board Idle</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                </tbody>
              </table>
            </div>
+        </div>
+      ) : activeTab === 'access' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
+           {users.map(user => (
+             <div key={user.id} className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                {/* User Access UI */}
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center">
+                    <Shield size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900">{user.name || user.email}</h3>
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-1">{user.role}</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  {[
+                    { id: 'canManageInventory', label: 'Inventory Access', icon: Lock },
+                    { id: 'canManageClients', label: 'Client Database', icon: Lock },
+                    { id: 'canManageAccounting', label: 'Financial Records', icon: Lock },
+                    { id: 'canManageOrders', label: 'Order Management', icon: Lock },
+                    { id: 'canApprovePayroll', label: 'Approve Payroll', icon: Lock },
+                    { id: 'canProcessPayments', label: 'Process Payments', icon: Lock }
+                  ].map((perm) => (
+                    <div key={perm.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                       <div className="flex items-center gap-3">
+                          <perm.icon size={14} className="text-slate-400" />
+                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{perm.label}</span>
+                       </div>
+                       <button 
+                         onClick={async () => {
+                           const updatedPerms = { ...(user.permissions || {}), [perm.id]: !user.permissions?.[perm.id as keyof typeof user.permissions] };
+                           await updateDoc(doc(db, 'users', user.id), { permissions: updatedPerms });
+                           fetchData();
+                         }}
+                         className={`p-2 rounded-xl transition-all ${user.permissions?.[perm.id as keyof typeof user.permissions] ? 'bg-green-500 text-white shadow-lg' : 'bg-slate-200 text-slate-400'}`}
+                       >
+                          {user.permissions?.[perm.id as keyof typeof user.permissions] ? <Unlock size={14} /> : <Lock size={14} />}
+                       </button>
+                    </div>
+                  ))}
+                </div>
+             </div>
+           ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+           <table className="w-full text-left min-w-[800px]">
+              <thead>
+                 <tr className="text-[10px] uppercase tracking-widest text-slate-400 font-black bg-slate-50/50 border-b border-slate-100">
+                    <th className="px-6 py-5">Personnel</th>
+                    <th className="px-6 py-5">Period</th>
+                    <th className="px-6 py-5">Net Remuneration</th>
+                    <th className="px-6 py-5">Status</th>
+                    <th className="px-6 py-5">Payout Date</th>
+                 </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                 {payrollHistory.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(record => (
+                   <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                         <p className="text-xs font-black text-slate-900">{record.employeeName}</p>
+                         <p className="text-[9px] text-slate-400 font-mono">#{record.id.slice(0, 8)}</p>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-widest">{record.month}</td>
+                      <td className="px-6 py-4 text-xs font-black font-mono text-slate-900">Rs. {record.netSalary.toLocaleString()}</td>
+                      <td className="px-6 py-4">
+                         <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-green-100">
+                            {record.status}
+                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-slate-500">{record.payoutDate}</td>
+                   </tr>
+                 ))}
+                 {payrollHistory.length === 0 && (
+                   <tr>
+                      <td colSpan={5} className="px-6 py-24 text-center">
+                         <div className="flex flex-col items-center gap-3 text-slate-300">
+                            <DollarSign size={48} strokeWidth={1} className="opacity-10" />
+                            <p className="text-[10px] font-black uppercase tracking-widest">Historical Ledger Empty</p>
+                         </div>
+                      </td>
+                   </tr>
+                 )}
+              </tbody>
+           </table>
         </div>
       )}
       <EmployeeModal 
@@ -288,6 +402,12 @@ export default function Employees() {
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchData}
         employee={selectedEmployee}
+      />
+      <PayrollModal 
+        isOpen={isPayrollModalOpen}
+        onClose={() => setIsPayrollModalOpen(false)}
+        onSuccess={fetchData}
+        employees={employees}
       />
     </div>
   );

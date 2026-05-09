@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
-import { Client, Employee, OrderItem, Order } from '../types';
-import { X, Plus, Trash2, Save, User, UserCheck, Calendar, Scissors } from 'lucide-react';
+import { Client, Employee, OrderItem, Order, Branch, OrderWorkflowStatus } from '../types';
+import { X, Plus, Trash2, Save, User, UserCheck, Calendar, Scissors, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useUser } from '../contexts/UserContext';
 
 interface Props {
   onClose: () => void;
@@ -11,15 +12,19 @@ interface Props {
 }
 
 export default function NewOrderForm({ onClose, onSuccess }: Props) {
+  const { profile } = useUser();
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
 
   const [formData, setFormData] = useState({
     clientId: '',
     clientName: '',
     dueDate: '',
     assignedTo: '',
-    items: [{ type: 'Shirt', description: '', price: 0 }] as OrderItem[]
+    branchId: profile?.branchId || '',
+    advancePayment: 0,
+    items: [{ id: Math.random().toString(36).substr(2, 9), type: 'Shirt', description: '', price: 0, status: 'measurement' }] as OrderItem[]
   });
 
   useEffect(() => {
@@ -27,17 +32,23 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
       try {
         const cSnap = await getDocs(query(collection(db, 'clients'), orderBy('name')));
         const eSnap = await getDocs(query(collection(db, 'employees'), orderBy('name')));
+        const bSnap = await getDocs(query(collection(db, 'branches')));
+
         setClients(cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
         setEmployees(eSnap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
+        setBranches(bSnap.docs.map(d => ({ id: d.id, ...d.data() } as Branch)));
       } catch (e) {
         console.error(e);
       }
     }
     fetchData();
-  }, [onClose, onSuccess]);
+  }, []);
 
   const addItem = () => {
-    setFormData({ ...formData, items: [...formData.items, { type: 'Suit', description: '', price: 0 }] });
+    setFormData({ 
+      ...formData, 
+      items: [...formData.items, { id: Math.random().toString(36).substr(2, 9), type: 'Suit', description: '', price: 0, status: 'measurement' }] 
+    });
   };
 
   const removeItem = (index: number) => {
@@ -59,18 +70,28 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
       const orderData: Omit<Order, 'id'> = {
         clientId: formData.clientId,
         clientName: selectedClient?.name || 'Unknown',
-        items: formData.items,
+        clientPhone: selectedClient?.phone || '',
+        items: formData.items.map(item => ({
+          ...item,
+          measurements: item.measurements || selectedClient?.measurements || {},
+          status: item.status || 'measurement' as OrderWorkflowStatus,
+          dueDate: item.dueDate || formData.dueDate
+        })),
         status: 'pending',
         totalAmount,
         paidAmount: 0,
+        advancePayment: formData.advancePayment,
         dueDate: formData.dueDate,
         assignedTo: formData.assignedTo,
-        taskStatus: {
-          cutting: 'pending',
-          stitching: 'pending',
-          finishing: 'pending'
-        },
-        createdAt: new Date().toISOString()
+        branchId: formData.branchId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        auditTrail: [{
+          action: 'create',
+          actor: profile?.name || profile?.email || 'System',
+          timestamp: new Date().toISOString(),
+          details: 'Order created'
+        }]
       };
 
       const docRef = await addDoc(collection(db, 'orders'), orderData);
@@ -160,8 +181,26 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <MapPin size={12} />
+                Branch
+              </label>
+              <select 
+                required
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                value={formData.branchId}
+                onChange={e => setFormData({...formData, branchId: e.target.value})}
+              >
+                <option value="">Select branch...</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Calendar size={12} />
-                Due Date
+                Global Due Date
               </label>
               <input 
                 type="date"
@@ -171,21 +210,30 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
                 onChange={e => setFormData({...formData, dueDate: e.target.value})}
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <UserCheck size={12} />
+                Primary Assignee
+              </label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                value={formData.assignedTo}
+                onChange={e => setFormData({...formData, assignedTo: e.target.value})}
+              >
+                <option value="">Choose employee...</option>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.name} - {e.role}</option>)}
+              </select>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <UserCheck size={12} />
-              Assign to Employee
-            </label>
-            <select 
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              value={formData.assignedTo}
-              onChange={e => setFormData({...formData, assignedTo: e.target.value})}
-            >
-              <option value="">Choose employee...</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.name} - {e.role}</option>)}
-            </select>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Advance Payment (Rs.)</label>
+            <input 
+              type="number"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              value={formData.advancePayment || ''}
+              onChange={e => setFormData({...formData, advancePayment: parseFloat(e.target.value)})}
+            />
           </div>
 
           <div className="space-y-4">

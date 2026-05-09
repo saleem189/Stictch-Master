@@ -1,22 +1,27 @@
-# Security Specification: StitchMaster ERP
+# Security Specification: Tailoring Empire ERP
 
-## Data Invariants
-1. A client can only view their own measurements and order status.
-2. An employee with 'admin' role can manage inventory, vendors, accounting, and employees.
-3. Inventory changes must be logged (implied by ledger sync).
-4. Financial transactions are immutable once created (accounting standard).
-5. Orders must be linked to valid clients and employees.
+## 1. Data Invariants
+- **Orders**: Cannot exist without a valid `clientId` and `branchId`. Total amount must match the sum of items.
+- **Financial Documents**: Must link to an `orderId` or `clientId`/`employeeId`. Status must be protected based on transaction types.
+- **Payroll**: Only `admin` can create or update payroll records. Payment must sync with a ledger transaction.
+- **Tasks**: Must belong to an `employeeId` and an `orderId`.
 
-## The "Dirty Dozen" Payloads (Anti-Patterns)
-1. **Identity Theft**: Creating an order for another client by spoofing `clientId`.
-2. **Resource Poisoning**: Injecting 1MB strings into measurement fields.
-3. **Ghost Update**: Modifying `totalAmount` on an order after it has been finished.
-4. **Account Hijack**: A non-admin user trying to credit/debit GL accounts.
-5. **Orphan Reference**: Creating a transaction without a valid `debitAccountId`.
-6. **Future Date Injection**: Setting `createdAt` to a future timestamp.
-7. **Role Escalation**: Self-assigning 'admin' role in the employee record.
-8. **Negative Stock**: Updating inventory to negative values.
-9. **Vendor Spoofing**: Creating bills for non-existent vendors.
-10. **State Skipping**: Moving an order from 'pending' directly to 'delivered'.
-11. **PII Leak**: Querying for all clients' phone numbers as a regular user.
-12. **Double Ledger**: Creating a transaction where credit and debit accounts are the same.
+## 2. The "Dirty Dozen" Payloads (Denial Tests)
+1. **Privilege Escalation**: User updating their own profile to `role: 'admin'`.
+2. **Order Tampering**: User updating `paidAmount` of their own order without a valid transaction.
+3. **Ghost Items**: Creating an order with a `totalAmount` that doesn't match the items sum (difficult to check in rules, so we check types).
+4. **ID Poisoning**: Creating a client with a 2MB string as ID.
+5. **PII Leak**: Accessing another client's measurement record without being assigned as their stitcher (simplified to `isEmployee()`).
+6. **Financial spoofing**: Creating a `receipt` document as a client.
+7. **Negative Ledger**: Creating a transaction with a negative amount (unless it's an adjustment).
+8. **Inventory Drain**: Updating item quantity to negative.
+9. **Status Shortcutting**: Skipping workflow stages in an order (e.g., pending -> delivered).
+10. **Shadow Payroll**: Creating a payroll record for oneself.
+11. **Cross-Tenant Access**: Reading branches one does not belong to (though it's a single-tenant enterprise for now).
+12. **Malicious Notes**: Injected Large Blobs into `notes` fields.
+
+## 3. Test Runner (Draft)
+```ts
+// firestore.rules.test.ts (conceptual)
+// ... tests for each of the above ...
+```

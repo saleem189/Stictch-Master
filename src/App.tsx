@@ -10,7 +10,11 @@ import {
   Menu,
   LogOut,
   Scissors,
-  ShoppingBag
+  ShoppingBag,
+  Calendar,
+  MapPin,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import React from 'react';
 import { auth } from './lib/firebase';
@@ -32,6 +36,8 @@ import Vendors from './pages/Vendors';
 import Accounting from './pages/Accounting';
 import Employees from './pages/Employees';
 import Profile from './pages/Profile';
+import Appointments from './pages/Appointments';
+import Branches from './pages/Branches';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const SidebarItem = ({ to, icon: Icon, label, active, key }: { to: string, icon: any, label: string, active: boolean, key?: string }) => (
@@ -52,7 +58,19 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const { user, profile, isAdmin } = useUser();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const { t, i18n } = useTranslation();
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dir = i18n.language === 'ur' ? 'rtl' : 'ltr';
@@ -63,10 +81,12 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     { to: "/admin", icon: LayoutDashboard, label: t('Dashboard'), adminOnly: false },
     { to: "/admin/orders", icon: ShoppingBag, label: t('Work Orders'), adminOnly: false },
     { to: "/admin/clients", icon: Users, label: t('Clients'), adminOnly: false },
+    { to: "/admin/appointments", icon: Calendar, label: t('Appointments'), adminOnly: false },
     { to: "/admin/inventory", icon: Package, label: t('Inventory'), adminOnly: false },
     { to: "/admin/vendors", icon: Truck, label: t('Vendors'), adminOnly: true },
     { to: "/admin/accounting", icon: BookOpen, label: t('General Ledger'), adminOnly: true },
     { to: "/admin/employees", icon: UserCircle, label: t('Employees'), adminOnly: true },
+    { to: "/admin/branches", icon: MapPin, label: t('Branches'), adminOnly: true },
     { to: "/admin/profile", icon: UserCircle, label: t('My Profile'), adminOnly: false },
   ];
 
@@ -169,6 +189,18 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
           
           <div className="flex items-center gap-3 lg:gap-6">
+            {!isOnline && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 rounded-full border border-amber-100 animate-pulse">
+                <WifiOff size={12} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Offline Mode</span>
+              </div>
+            )}
+            {isOnline && (
+               <div className="hidden sm:flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-300">
+                 <Wifi size={10} className="text-green-500" />
+                 Synced
+               </div>
+            )}
             <LanguageToggle />
             <NotificationBell />
             <div className="h-6 w-px bg-slate-200" />
@@ -262,12 +294,14 @@ function AppContent() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/clients" element={<Clients />} />
+              <Route path="/appointments" element={<Appointments />} />
               <Route path="/inventory" element={<Inventory />} />
               
               {/* Restricted Admin only routes */}
               <Route path="/vendors" element={isAdmin ? <Vendors /> : <Navigate to="/admin" />} />
               <Route path="/accounting" element={isAdmin ? <Accounting /> : <Navigate to="/admin" />} />
               <Route path="/employees" element={isAdmin ? <Employees /> : <Navigate to="/admin" />} />
+              <Route path="/branches" element={isAdmin ? <Branches /> : <Navigate to="/admin" />} />
               <Route path="/profile" element={<Profile />} />
               
               <Route path="*" element={<Navigate to="/admin" replace />} />

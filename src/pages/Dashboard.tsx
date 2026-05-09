@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Order, InventoryItem } from '../types';
+import { Order, InventoryItem, Transaction } from '../types';
 import { 
   Clock, 
   AlertTriangle, 
@@ -11,15 +11,17 @@ import {
   CheckCircle2, 
   ArrowUpRight,
   Sparkles,
-  Zap
+  Zap,
+  Download
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import NewOrderForm from '../components/NewOrderForm';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from 'recharts';
 import { processRecurringTransactions } from '../lib/automation';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import { exportToCSV } from '../lib/exportUtils';
 
 const QuickAction = ({ icon: Icon, label, color, onClick }: { icon: React.ElementType, label: string, color: string, onClick: () => void }) => (
   <button 
@@ -69,10 +71,13 @@ export default function Dashboard() {
     totalClients: 0,
     lowStock: 0,
     monthlyRevenue: 0,
-    deliveredThisMonth: 0
+    monthlyPayroll: 0,
+    deliveredThisMonth: 0,
+    receivables: 0
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [chartData, setChartData] = useState<{ name: string; count: number; color: string }[]>([]);
+  const [revenueData, setRevenueData] = useState<{ name: string; revenue: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
 
@@ -88,47 +93,93 @@ export default function Dashboard() {
           });
         }
 
-        const ordersSnap = await getDocs(collection(db, 'orders'));
-        const clientsSnap = await getDocs(collection(db, 'clients'));
-        const inventorySnap = await getDocs(collection(db, 'inventory'));
+        const [ordersSnap, clientsSnap, inventorySnap, txnSnap] = await Promise.all([
+          getDocs(collection(db, 'orders')),
+          getDocs(collection(db, 'clients')),
+          getDocs(collection(db, 'inventory')),
+          getDocs(query(collection(db, 'transactions'), orderBy('date', 'desc')))
+        ]);
         
-        const orders = ordersSnap.docs.map(d => d.data());
-        const active = orders.filter(d => d.status !== 'delivered').length;
+        const orders = ordersSnap.docs.map(d => d.data() as Order);
+        const transactions = txnSnap.docs.map(d => d.data() as Transaction);
+        const active = orders.filter(d => d.status !== 'delivered' && d.status !== 'cancelled').length;
         const lowItems = inventorySnap.docs
           .map(d => ({ id: d.id, ...d.data() } as InventoryItem))
           .filter(d => d.quantity <= d.minLevel);
         
+        const now = new Date();
+        const currentMonth = now.toISOString().slice(0, 7);
+        
         let revenue = 0;
-        let delivered = 0;
-        orders.forEach(o => {
-          revenue += o.paidAmount || 0;
-          if (o.status === 'delivered') delivered++;
+        let payroll = 0;
+        let totalReceivables = 0;
+        const monthlyRev: Record<string, number> = {};
+
+        transactions.forEach(txn => {
+           const txnMonth = txn.date.slice(0, 7);
+           if (txnMonth === currentMonth) {
+              if (txn.type === 'sale') revenue += txn.amount;
+              if (txn.type === 'payroll') payroll += txn.amount;
+           }
+           
+           const monthName = new Date(txn.date).toLocaleString('default', { month: 'short' });
+           if (txn.type === 'sale') {
+              monthlyRev[monthName] = (monthlyRev[monthName] || 0) + txn.amount;
+           }
         });
+
+        orders.forEach(o => {
+          if (o.status !== 'delivered' && o.status !== 'cancelled') {
+             totalReceivables += (o.totalAmount - (o.paidAmount || 0));
+          }
+        });
+
+        const revEntries = Object.entries(monthlyRev).map(([name, r]) => ({ name, revenue: r }));
+        setRevenueData(revEntries.slice(-6));
 
         setStats({
           activeOrders: active,
           totalClients: clientsSnap.size,
           lowStock: lowItems.length,
           monthlyRevenue: revenue,
-          deliveredThisMonth: delivered
+          monthlyPayroll: payroll,
+          deliveredThisMonth: orders.filter(o => o.status === 'delivered').length,
+          receivables: totalReceivables
         });
 
-        // Chart Data for Workflow
-        const counts = {
-          pending: orders.filter(o => o.status === 'pending').length,
-          cutting: orders.filter(o => o.status === 'cutting').length,
-          stitching: orders.filter(o => o.status === 'stitching').length,
-          finished: orders.filter(o => o.status === 'finished').length,
+        // Advanced Analytics: Workflow Distribution (Item-based)
+        const itemStages: Record<string, number> = {};
+        const employeeLoad: Record<string, number> = {};
+
+        orders.forEach(o => {
+          (o.items || []).forEach(item => {
+            const s = item.status || 'pending';
+            itemStages[s] = (itemStages[s] || 0) + 1;
+            
+            if (o.assignedTo) {
+              employeeLoad[o.assignedTo] = (employeeLoad[o.assignedTo] || 0) + 1;
+            }
+          });
+        });
+
+        const statusColors: Record<string, string> = {
+          'measurement': '#f1f5f9',
+          'fabric-reservation': '#f1f5f9',
+          'pattern-making': '#e2e8f0',
+          'cutting': '#cbd5e1',
+          'stitching': '#94a3b8',
+          'trial': '#64748b',
+          'ready': '#4f46e5',
+          'delivered': '#10b981'
         };
 
-        setChartData([
-          { name: 'Pending', count: counts.pending, color: '#f1f5f9' },
-          { name: 'Cutting', count: counts.cutting, color: '#e0e7ff' },
-          { name: 'Stitching', count: counts.stitching, color: '#c7d2fe' },
-          { name: 'Finished', count: counts.finished, color: '#4f46e5' },
-        ]);
+        setChartData(Object.entries(itemStages).map(([name, count]) => ({
+          name: name.replace('-', ' '),
+          count,
+          color: statusColors[name] || '#94a3b8'
+        })).sort((a, b) => b.count - a.count).slice(0, 5));
 
-        const recentQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(5));
+        const recentQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(10));
         const recentSnap = await getDocs(recentQuery);
         setRecentOrders(recentSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
       } catch (error) {
@@ -164,16 +215,22 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-           <div className="flex -space-x-2 hidden sm:flex">
-              {[1,2,3].map(i => (
-                <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                  {String.fromCharCode(64 + i)}
-                </div>
-              ))}
-              <div className="w-8 h-8 rounded-full border-2 border-white bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white">
-                +{stats.totalClients}
-              </div>
-           </div>
+           <button 
+             onClick={() => {
+               const data = [
+                 { Metric: 'Active Orders', Value: stats.activeOrders },
+                 { Metric: 'Total Clients', Value: stats.totalClients },
+                 { Metric: 'Monthly Revenue', Value: stats.monthlyRevenue },
+                 { Metric: 'Monthly Payroll', Value: stats.monthlyPayroll },
+                 { Metric: 'Outstanding Receivables', Value: stats.receivables }
+               ];
+               exportToCSV(data, `operations_summary_${new Date().toISOString().split('T')[0]}`);
+             }}
+             className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+           >
+              <Download size={18} />
+              Export Summary
+           </button>
            <button onClick={() => setIsNewOrderOpen(true)} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
              <Zap size={18} />
              {t('Live Order Entry')}
@@ -192,10 +249,10 @@ export default function Dashboard() {
 
       {/* Grid of Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <StatCard title={t('Revenue (MTD)')} value={`Rs. ${stats.monthlyRevenue.toLocaleString()}`} trend={15} trendLabel="+15% vs LY" icon={TrendingUp} color="bg-indigo-600" />
-        <StatCard title={t('Active Load')} value={`${stats.activeOrders} Workflows`} trend={-5} trendLabel="Efficient flow" icon={ShoppingBag} color="bg-blue-600" />
-        <StatCard title={t('Total Clients')} value={stats.totalClients} trendLabel="Growing base" icon={Users} color="bg-purple-600" />
-        <StatCard title={t('Production')} value={stats.deliveredThisMonth} trendLabel="Completed orders" icon={CheckCircle2} color="bg-green-600" />
+        <StatCard title={t('Cash Inflow (MTD)')} value={`Rs. ${stats.monthlyRevenue.toLocaleString()}`} trend={15} trendLabel="+15% vs LY" icon={TrendingUp} color="bg-green-600" />
+        <StatCard title={t('Payroll Load')} value={`Rs. ${stats.monthlyPayroll.toLocaleString()}`} trend={5} trendLabel="Salaries + Bonuses" icon={Users} color="bg-indigo-600" />
+        <StatCard title={t('Accounts Receivable')} value={`Rs. ${stats.receivables.toLocaleString()}`} trendLabel="Outstanding Balances" icon={DollarSign} color="bg-amber-600" />
+        <StatCard title={t('Workload')} value={`${stats.activeOrders} Orders`} trendLabel="Active Pipeline" icon={ShoppingBag} color="bg-blue-600" />
       </div>
 
       <div className="grid grid-cols-12 gap-6 sm:gap-8">
@@ -235,6 +292,33 @@ export default function Dashboard() {
                </BarChart>
              </ResponsiveContainer>
            </div>
+        </div>
+
+        {/* Revenue Trend Chart */}
+        <div className="col-span-12 lg:col-span-12 xl:col-span-4 bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-8 flex flex-col min-h-[400px]">
+          <div className="mb-8">
+            <h2 className="text-xl font-black text-slate-900 truncate">Revenue Inflow</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Cash Performance</p>
+          </div>
+          <div className="flex-1 min-h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={revenueData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontStyle: 'italic', fill: '#94a3b8' }} 
+                  dy={10}
+                />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold', fill: '#94a3b8' }} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                />
+                <Line type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={4} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Dynamic Alerts Side Column */}

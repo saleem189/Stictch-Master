@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { InventoryItem } from '../types';
-import { Package, Plus, AlertCircle, Search, Edit2 } from 'lucide-react';
+import { Package, Plus, AlertCircle, Search, Edit2, Layers } from 'lucide-react';
 import InventoryModal from '../components/InventoryModal';
+import RollManagementModal from '../components/RollManagementModal';
 
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +13,7 @@ export default function Inventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRollModalOpen, setIsRollModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | undefined>();
 
   useEffect(() => {
@@ -115,12 +117,23 @@ export default function Inventory() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => { setSelectedItem(item); setIsModalOpen(true); }}
-                      className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all active:scale-90 opacity-0 group-hover:opacity-100"
-                    >
-                      <Edit2 size={16} />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      {item.isRollTracked && (
+                        <button 
+                          onClick={() => { setSelectedItem(item); setIsRollModalOpen(true); }}
+                          className="p-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                          title="Manage Rolls"
+                        >
+                          <Layers size={16} />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => { setSelectedItem(item); setIsModalOpen(true); }}
+                        className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all active:scale-90 opacity-0 group-hover:opacity-100"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -145,6 +158,15 @@ export default function Inventory() {
         onSuccess={fetchInventory} 
         item={selectedItem}
       />
+
+      {selectedItem && (
+        <RollManagementModal
+          isOpen={isRollModalOpen}
+          onClose={() => setIsRollModalOpen(false)}
+          item={selectedItem}
+          onSuccess={fetchInventory}
+        />
+      )}
     </div>
   );
 }
