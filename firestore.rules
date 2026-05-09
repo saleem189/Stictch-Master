@@ -1,0 +1,145 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        request.auth.token.email == 'saleemayoub1@gmail.com'
+      );
+    }
+    function isEmployee() {
+      return isSignedIn() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employee')
+      );
+    }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // User Rules
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isAdmin() || (
+        isSignedIn() && request.auth.uid == userId && 
+        existing().role != 'employee' &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone'])
+      );
+    }
+
+    // Profile Change Request Rules
+    function isValidProfileRequest(data) {
+      return data.userId is string && data.suggestedChanges is map &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+    match /profileRequests/{requestId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && 
+                    isValidProfileRequest(incoming()) && incoming().status == 'pending';
+      allow update: if isAdmin() && isValidProfileRequest(incoming());
+    }
+
+    // Client Rules
+    function isValidClient(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.phone is string && data.phone.size() > 0 && data.phone.size() < 20 &&
+             (!('email' in data) || (data.email is string && data.email.size() < 100));
+    }
+    match /clients/{clientId} {
+      allow get: if isSignedIn() && (request.auth.uid == clientId || isEmployee());
+      allow list: if isEmployee();
+      allow create: if isEmployee() && isValidClient(incoming()) &&
+                    incoming().keys().hasAll(['name', 'phone']) && incoming().keys().size() >= 2;
+      allow update: if isEmployee() && isValidClient(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'measurements', 'createdAt']);
+    }
+
+    // Order Rules
+    function isValidOrder(data) {
+      return data.clientId is string && data.clientId.size() < 100 &&
+             data.status in ['pending', 'cutting', 'stitching', 'finished', 'delivered'] &&
+             data.totalAmount is number && data.totalAmount >= 0;
+    }
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
+      allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
+      allow create: if isEmployee() && isValidOrder(incoming()) &&
+                    incoming().keys().hasAll(['clientId', 'status', 'totalAmount']) && incoming().keys().size() >= 3;
+      allow update: if isEmployee() && isValidOrder(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paidAmount', 'items', 'assignedTo', 'dueDate', 'clientName', 'taskStatus', 'createdAt', 'updatedAt']);
+    }
+
+    // Inventory Rules
+    function isValidInventory(data) {
+      return data.name is string && data.quantity is number && data.quantity >= 0;
+    }
+    match /inventory/{itemId} {
+      allow read: if isEmployee();
+      allow write: if isEmployee() && isValidInventory(incoming());
+    }
+
+    // Vendor Rules
+    match /vendors/{vendorId} {
+      allow read: if isEmployee();
+      allow write: if isAdmin();
+    }
+    match /vendorBills/{billId} {
+      allow read: if isEmployee();
+      allow write: if isAdmin();
+    }
+
+    // Accounting Rules
+    match /accounts/{accountId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+    match /transactions/{txnId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && incoming().debitAccountId != incoming().creditAccountId;
+    }
+
+    // Employee Rules
+    match /employees/{empId} {
+      allow read: if isEmployee();
+      allow create: if isAdmin() || (isSignedIn() && request.auth.token.email == 'saleemayoub1@gmail.com');
+      allow update: if isAdmin();
+    }
+
+    // Task Rules
+    match /tasks/{taskId} {
+      allow read: if isEmployee();
+      allow write: if isEmployee();
+    }
+
+    // Payment Rules
+    match /payments/{paymentId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+    }
+
+    // Notification Rules
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+    }
+
+    // Recurring Transactions Rules
+    match /recurringTransactions/{txnId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

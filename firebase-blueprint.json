@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "Customer of the tailor shop with measurement data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "measurements": {
+          "type": "object",
+          "properties": {
+            "neck": { "type": "number" },
+            "chest": { "type": "number" },
+            "waist": { "type": "number" },
+            "hip": { "type": "number" },
+            "shoulder": { "type": "number" },
+            "sleeve": { "type": "number" },
+            "length": { "type": "number" },
+            "inseam": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Tailoring order with status tracking",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "description": { "type": "string" },
+              "price": { "type": "number" }
+            }
+          }
+        },
+        "status": { "type": "string", "enum": ["pending", "cutting", "stitching", "finished", "delivered"] },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date" },
+        "assignedTo": { "type": "string" },
+        "taskStatus": {
+          "type": "object",
+          "properties": {
+            "cutting": { "type": "string", "enum": ["pending", "in-progress", "completed"] },
+            "stitching": { "type": "string", "enum": ["pending", "in-progress", "completed"] },
+            "finishing": { "type": "string", "enum": ["pending", "in-progress", "completed"] }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Specific tailoring task assigned to an employee",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "type": { "type": "string", "enum": ["cutting", "stitching", "finishing"] },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "completed"] },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment record for vendor or client",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "type": { "type": "string", "enum": ["inbound", "outbound"] },
+        "entityId": { "type": "string" },
+        "referenceId": { "type": "string" }
+      }
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "Stock items like fabric rolls, buttons, etc.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "minLevel": { "type": "number" },
+        "pricePerUnit": { "type": "number" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Vendor": {
+      "title": "Vendor",
+      "description": "Suppliers of materials",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "contact": { "type": "string" },
+        "address": { "type": "string" },
+        "balance": { "type": "number" }
+      }
+    },
+    "VendorBill": {
+      "title": "Vendor Bill",
+      "description": "Invoices received from vendors",
+      "type": "object",
+      "properties": {
+        "vendorId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["unpaid", "partial", "paid"] }
+      }
+    },
+    "Account": {
+      "title": "Account",
+      "description": "GL Account for bookkeeping",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["asset", "liability", "equity", "revenue", "expense"] },
+        "balance": { "type": "number" }
+      }
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial journal entry",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "debitAccountId": { "type": "string" },
+        "creditAccountId": { "type": "string" },
+        "reference": { "type": "string" }
+      }
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Staff members",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "salary": { "type": "number" },
+        "phone": { "type": "string" },
+        "joinedAt": { "type": "string", "format": "date" }
+      }
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "App user roles and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "employee", "client"] },
+        "employeeId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ProfileRequest": {
+      "title": "Profile Change Request",
+      "description": "Employee request to update their profile",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "requestDate": { "type": "string", "format": "date-time" },
+        "suggestedChanges": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "phone": { "type": "string" }
+          }
+        },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "adminResponse": { "type": "string" }
+      }
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System alerts and notifications",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "warning", "success", "error"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "RecurringTransaction": {
+      "title": "Recurring Transaction",
+      "description": "Template for automated recurring payments or bills",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly", "yearly"] },
+        "type": { "type": "string", "enum": ["expense", "revenue"] },
+        "category": { "type": "string" },
+        "debitAccountId": { "type": "string" },
+        "creditAccountId": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "lastProcessed": { "type": "string", "format": "date" },
+        "nextDueDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["active", "paused"] }
+      }
+    }
+  },
+  "firestore": {
+    "/clients/{clientId}": { "schema": "Client", "description": "Individual client records" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Work orders for tailoring" },
+    "/inventory/{itemId}": { "schema": "InventoryItem", "description": "Stock tracking" },
+    "/vendors/{vendorId}": { "schema": "Vendor", "description": "Supplier information" },
+    "/vendorBills/{billId}": { "schema": "VendorBill", "description": "Purchasing records" },
+    "/accounts/{accountId}": { "schema": "Account", "description": "Chart of Accounts" },
+    "/transactions/{txnId}": { "schema": "Transaction", "description": "Financial journal" },
+    "/employees/{empId}": { "schema": "Employee", "description": "HR records" },
+    "/tasks/{taskId}": { "schema": "Task", "description": "Work assignments" },
+    "/payments/{paymentId}": { "schema": "Payment", "description": "Financial flows" },
+    "/users/{uid}": { "schema": "UserProfile", "description": "User roles and permissions" },
+    "/profileRequests/{requestId}": { "schema": "ProfileRequest", "description": "Employee profile change requests" },
+    "/notifications/{notifId}": { "schema": "Notification", "description": "System alerts" },
+    "/recurringTransactions/{txnId}": { "schema": "RecurringTransaction", "description": "Automated ledger entries" }
+  }
+}
