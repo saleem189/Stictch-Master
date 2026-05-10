@@ -82,7 +82,7 @@ export default function Accounting() {
   const equity = accounts.filter(a => a.type === 'equity').reduce((acc, curr) => acc + curr.balance, 0);
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="p-4 sm:p-8 pb-32 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight italic uppercase">{t('Financial Intelligence')}</h1>
@@ -181,7 +181,7 @@ export default function Accounting() {
                 <h2 className="font-black text-slate-900 uppercase tracking-tight text-sm">Recent Journal Entries</h2>
                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Latest 50 Operations</div>
               </div>
-              <div className="overflow-x-auto scrollbar-hide">
+              <div className="overflow-x-auto">
                 <table className="w-full text-left min-w-[700px]">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-widest text-slate-400 bg-slate-50/50 font-black">

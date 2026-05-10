@@ -137,7 +137,7 @@ export default function Employees() {
   );
 
   return (
-    <div className="p-4 sm:p-8 space-y-8 animate-in fade-in duration-500">
+    <div className="p-4 sm:p-8 pb-32 space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight italic uppercase">{t('Employees')}</h1>

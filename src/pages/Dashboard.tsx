@@ -243,7 +243,7 @@ export default function Dashboard() {
   );
 
   return (
-    <div id="dashboard-container" className="p-4 sm:p-8 space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <div id="dashboard-container" className="p-4 sm:p-8 pb-32 space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
       {/* Header */}
       <div id="dashboard-header" className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>

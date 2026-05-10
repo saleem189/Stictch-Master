@@ -139,7 +139,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   );
 
   return (
-    <div id="admin-layout" className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900 border-t-2 border-indigo-600">
+    <div id="admin-layout" className="flex h-[100dvh] bg-slate-50 overflow-hidden font-sans text-slate-900 border-t-2 border-indigo-600">
       {/* Sidebar - Desktop */}
       <aside id="sidebar-desktop" className="hidden lg:flex flex-col w-64 shrink-0 border-r border-slate-200">
         <SidebarContent />
@@ -216,7 +216,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 overscroll-none">
+        <main className="flex-1 overflow-y-auto bg-slate-50/50">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -224,7 +224,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.99, y: -5 }}
               transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
-              className="p-4 lg:p-8 max-w-7xl mx-auto w-full h-full"
+              className="w-full min-h-full flex flex-col"
             >
               {children}
             </motion.div>
@@ -242,7 +242,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-[100dvh] bg-slate-950 flex flex-col">
       <nav className="p-8">
         <Link to="/" className="flex items-center gap-2">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
@@ -276,7 +276,7 @@ function AppContent() {
   const { user, loading, isAdmin } = useUser();
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
+    <div className="h-[100dvh] flex items-center justify-center bg-slate-50">
       <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
         <Scissors size={48} className="text-indigo-600" />
       </motion.div>
