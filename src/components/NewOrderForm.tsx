@@ -5,6 +5,7 @@ import { Client, Employee, OrderItem, Order, Branch, OrderWorkflowStatus } from 
 import { X, Plus, Trash2, Save, User, UserCheck, Calendar, Scissors, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
+import { calculateOrderTotal } from '../lib/orderFinance';
 
 interface Props {
   onClose: () => void;
@@ -65,7 +66,7 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
     e.preventDefault();
     try {
       const selectedClient = clients.find(c => c.id === formData.clientId);
-      const totalAmount = formData.items.reduce((sum, item) => sum + item.price, 0);
+      const totalAmount = calculateOrderTotal(formData.items);
 
       const orderData: Omit<Order, 'id'> = {
         clientId: formData.clientId,
@@ -287,7 +288,7 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
             <div className="text-slate-500">
                <span className="text-[10px] font-bold uppercase tracking-widest block">Total Amount</span>
-               <span className="text-xl font-bold text-slate-900 font-mono">Rs. {formData.items.reduce((s, i) => s + (i.price || 0), 0).toLocaleString()}</span>
+               <span className="text-xl font-bold text-slate-900 font-mono">Rs. {calculateOrderTotal(formData.items).toLocaleString()}</span>
             </div>
             <button type="submit" className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-200 active:scale-95 transition-all">
               <Save size={18} />

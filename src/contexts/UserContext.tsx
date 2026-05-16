@@ -16,6 +16,21 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+export const defaultClientPermissions = {
+  canEditMeasurements: false,
+  canApprovePayroll: false,
+  canProcessPayments: false,
+  canAdjustInventory: false,
+  canDeleteOrders: false,
+  canViewFinancialReports: false,
+  canManageEmployees: false,
+  canManageSystemSettings: false,
+  canManageInventory: false,
+  canManageClients: false,
+  canManageAccounting: false,
+  canManageOrders: false,
+};
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -29,20 +44,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (profileDoc.exists()) {
           setProfile(profileDoc.data() as UserProfile);
         } else {
-          // Default to admin for the first user or based on your logic
-          // In a real app, you'd handle this via secret invitation or manual assignment
           const newProfile: UserProfile = {
             uid: u.uid,
             email: u.email || '',
-            role: 'admin', // Default to admin for now to let the user use the app
-            permissions: {
-              canEditMeasurements: true,
-              canApprovePayroll: true,
-              canAdjustInventory: true,
-              canDeleteOrders: true,
-              canViewFinancialReports: true,
-              canManageEmployees: true
-            },
+            role: 'client',
+            permissions: defaultClientPermissions,
             createdAt: new Date().toISOString()
           };
           await setDoc(doc(db, 'users', u.uid), newProfile);

@@ -1,77 +1,187 @@
-# Tailoring Empire Technical Specification
+# Tailoring ERP Technical Specification
 
-This document provides a deep dive into the technical architecture, operational flows, and module-level specifications of the Tailoring Empire ERP.
+This document describes the current architecture and operational flows of Tailoring ERP.
 
 ## 1. System Architecture
 
-Tailoring Empire is a cloud-native ERP built with a "Zero-Trust" data model and a "Matrix" UI philosophy.
+Tailoring ERP is a Vite React application backed by Firebase Auth and Cloud Firestore. It supports a public storefront, a client portal, and an admin/employee ERP dashboard.
 
-### Frontend Stack
-- **Framework:** React 18+ (Vite)
-- **Styling:** Tailwind CSS v4
-- **Animations:** Motion (Framer Motion)
-- **Icons:** Lucide React
-- **Internationalization:** i18next
-- **Charts:** Recharts
+### Frontend
 
-### Backend / Data Transition
-- **Database:** Firebase Cloud Firestore
-- **Authentication:** Firebase Auth (Google Provider)
-- **Storage:** Standardized JSON structures in Firestore
+- React 19 with Vite
+- Tailwind CSS v4
+- Motion for state-driven page/modal transitions
+- Lucide React icons
+- Recharts for dashboard visualization
+- i18next and react-i18next for English/Urdu support
 
-## 2. Core Operational Flows
+### Backend
 
-### 2.1. The Client Lifecycle
-1. **Onboarding:** Client added via `Clients` module. Optional measurement profile created.
-2. **Engagement:** Appointment scheduled or Order placed.
-3. **History:** All orders and payments linked to `clientId`.
+- Firebase Authentication with Google provider
+- Cloud Firestore for operational data
+- Firestore Security Rules in `firestore.rules`
+- Collection shape documented in `firebase-blueprint.json`
 
-### 2.2. The Bespoke Order Pipeline (BOP)
-Every order follows a strict state transition:
-- `pending` -> `measurement` -> `pattern-making` -> `cutting` -> `stitching` -> `trial` -> `ready` -> `delivered`.
-- **Relational Integrity:** Orders contain `items`. Each item can have its own status, but the order status tracks the overall maturity.
+### Branding
 
-### 2.3. The Double-Entry Accounting Matrix
-- Every monetary event creates a `Transaction`.
-- **Debit/Credit Logic:**
-  - Order Advance: Debit `Cash`, Credit `Customer Deposits`.
-  - Final Payment: Debit `Cash`, Credit `Sales Revenue`.
-  - Payroll: Debit `Wage Expense`, Credit `Cash`.
+- Logo asset: `src/assets/stitchmaster-logo.png`
+- Reusable brand component: `src/components/BrandLogo.tsx`
+- Display brand: Tailoring ERP
 
-## 3. Module Specifications
+## 2. Route Map
 
-### 3.1. Dashboard (The Brain)
-- **Tech:** Recharts for visualization.
-- **Logic:** Aggregates real-time stats from `orders`, `transactions`, and `inventory`.
-- **Automation:** Proactively calls `processRecurringTransactions()` on mount to ensure ledger accuracy.
+- `/`: public storefront and tracking entry point
+- `/login`: shared login screen
+- `/client`: authenticated client dashboard
+- `/client/request-quote`: client bespoke quote request form
+- `/admin/*`: admin and employee ERP shell
 
-### 3.2. Inventory (The Supply Chain)
-- **Bento Grid Layout:** Visual representation of fabrics and notions.
-- **Thresholds:** `minLevel` triggers UI alerts and system notifications.
+Role routing is centralized in `src/lib/roleRouting.ts`:
 
-### 3.3. Personnel & Payroll
-- **Staff Tracking:** Employees linked to specific branches.
-- **Payroll Generation:** Monthly cycles based on fixed salary + performance bonuses.
+- `admin` -> `/admin`
+- `employee` -> `/admin`
+- `client` -> `/client`
+- missing/unknown role -> `/`
 
-## 4. Technical Standards
+If an unauthenticated visitor opens a client route, the app redirects to `/login` and returns a client user to the requested client route after login.
 
-### 4.1. Coding Conventions
-- **Naming:** CamelCase for functions/vars, PascalCase for components/types.
-- **Bilingualism:** No hardcoded strings. Use `t()` helper logic.
-- **Error Handling:** All Firestore operations MUST wrap in `try-catch` with `handleFirestoreError`.
+## 3. Core Operational Flows
 
-### 4.2. UI/UX Paradigm
-- **Roundedness:** Use `rounded-3xl` or `rounded-[2.5rem]` for main containers.
-- **Typography:** Swiss-Modern mix. Italicized font-black headings for a "High-End" feel.
-- **Feedback:** Standardized `toast` notifications for all write operations.
+### 3.1 Public Storefront
 
-## 5. Security Model (Firestore Rules)
+The homepage introduces the tailoring business, shows client-facing calls to action, and exposes order tracking. The primary public CTA is now `Request Bespoke Quote`, which routes through authentication into the client quote flow.
 
-- **Identity-Based:** Access controlled via `request.auth.uid`.
-- **Role-Based (RBAC):** Admin-only collections (Accounting, Employees) restricted via `isAdmin()` helper.
-- **Integrity:** `isValidId()` and `isValid[Entity]()` validation helpers on all writes.
+### 3.2 Client Quote Request
 
-## 6. Future Roadmap (AI Integration)
-- **Style Synthesis:** Using Gemini to suggest suit styles based on measurements.
-- **Voice Entry:** Master tailors dictating measurements via Gemini Multimodal.
-- **Automated Reordering:** AI predicting stock depletion based on order velocity.
+Clients submit bespoke inquiries through `/client/request-quote`.
+
+Required fields:
+
+- garment type
+- style notes
+- preferred due date
+- budget range
+- measurement source
+
+The form creates a `quoteRequests` document with `status: submitted`. It does not create an order, payment, transaction, or financial document. Staff conversion from quote to order is a future workflow.
+
+### 3.3 Client Dashboard
+
+The client dashboard reads:
+
+- `orders` where `clientId == auth.uid`
+- `quoteRequests` where `clientId == auth.uid`
+
+It shows order status, quote request status, payment summary, and a measurements placeholder.
+
+### 3.4 Admin/Employee Dashboard
+
+Admins and employees use `/admin/*` for operations:
+
+- dashboard analytics
+- orders
+- clients
+- appointments
+- inventory
+- profile
+
+Admins additionally access:
+
+- vendors
+- accounting
+- employees
+- branches
+
+### 3.5 Order Lifecycle
+
+Global order status:
+
+- `pending`
+- `in-progress`
+- `ready`
+- `delivered`
+- `cancelled`
+
+Item workflow status supports a more granular bespoke production pipeline:
+
+- `measurement`
+- `fabric-reservation`
+- `pattern-making`
+- `cutting`
+- `stitching`
+- `trial`
+- `fitting`
+- `alterations`
+- `finishing`
+- `quality-check`
+- `ready`
+- `delivered`
+- `archived`
+
+Orders include an embedded `auditTrail` array and optional `taskStatus` sync state.
+
+### 3.6 Accounting
+
+Financial records use double-entry fields:
+
+- `debitAccountId`
+- `creditAccountId`
+
+Payments, payroll, purchases, and recurring entries should keep orders, payments, transactions, documents, and account balances synchronized. Some flows still need transactional hardening; see `AUDIT_REPORT.md`.
+
+## 4. Data Model Highlights
+
+Central TypeScript interfaces live in `src/types.ts`.
+
+Recent important types:
+
+- `QuoteRequest`
+- `QuoteRequestStatus`
+- `MeasurementSource`
+- `OrderTaskStatus`
+- `AuditTrailEntry`
+
+Pure helper modules:
+
+- `src/lib/roleRouting.ts`
+- `src/lib/quoteRequests.ts`
+- `src/lib/orderFinance.ts`
+- `src/lib/validation.ts`
+
+## 5. Firestore Security Model
+
+Rules are role-based:
+
+- Self-created users are restricted to safe `client` profiles.
+- Admin and employee permissions derive from `/users/{uid}.role`.
+- Clients can create and read their own quote requests.
+- Employees/admins can read quote requests and update review status.
+- Admin-only collections remain restricted by `isAdmin()`.
+
+## 6. Testing and Verification
+
+Current unit coverage includes:
+
+- validation helpers
+- order finance helpers
+- role routing helpers
+- quote request helpers
+
+Primary commands:
+
+```bash
+npm test
+npm run lint
+npm run build
+```
+
+The build currently emits a known chunk-size warning because the admin surface is not route-split yet.
+
+## 7. Current Known Gaps
+
+- Public order tracking still needs a sanitized public tracking document or authenticated client-only tracking path.
+- Payment and payroll flows should be converted to `writeBatch` or `runTransaction`.
+- Quote-to-order conversion is not yet implemented.
+- Admin quote review UI is not yet implemented.
+- Route-level lazy loading should be added to reduce bundle size.
+- Firestore emulator tests should cover the security denial cases in `security_spec.md`.

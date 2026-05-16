@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { collection, addDoc, getDocs, doc, increment, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Order, OrderItem, OrderWorkflowStatus, Account } from '../types';
+import { AuditTrailEntry, Order, OrderItem, OrderStatus, OrderWorkflowStatus, Account } from '../types';
 import { X, Save, Clock, User, CheckCircle2, Scissors, Edit3, Truck, Archive, Info, Ruler, DollarSign } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
@@ -193,10 +193,10 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
                    <Info size={12} /> {t('Global Order Status')}
                  </h3>
              <div className="flex flex-wrap gap-2">
-                {['pending', 'in-progress', 'ready', 'delivered', 'cancelled', 'archived'].map((s) => (
+                {(['pending', 'in-progress', 'ready', 'delivered', 'cancelled'] as OrderStatus[]).map((s) => (
                   <button
                     key={s}
-                    onClick={() => setGlobalStatus(s as any)}
+                    onClick={() => setGlobalStatus(s)}
                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                       globalStatus === s 
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 ring-2 ring-indigo-600 ring-offset-2' 
@@ -343,7 +343,7 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
                  <Clock size={12} /> {t('Personnel Activity Log')}
                </h3>
                <div className="space-y-3">
-                  {order.auditTrail?.slice().reverse().map((entry: any, idx: number) => (
+                  {order.auditTrail?.slice().reverse().map((entry: AuditTrailEntry, idx: number) => (
                     <div key={idx} className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-white transition-all group">
                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-300 shrink-0 group-hover:scale-110 transition-transform">
                           <User size={16} />

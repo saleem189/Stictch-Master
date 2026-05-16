@@ -5,11 +5,9 @@ import { Appointment, Client, Employee } from '../types';
 import { Calendar, Plus, Clock, User, Scissors, CheckCircle2, XCircle, AlertCircle, Filter, ChevronLeft, ChevronRight, Info, X, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { useUser } from '../contexts/UserContext';
 
 export default function Appointments() {
   const { t } = useTranslation();
-  const { profile } = useUser();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -41,8 +39,6 @@ export default function Appointments() {
       setEmployees(eSnap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
     } catch (e) {
       handleFirestoreError(e, OperationType.GET, 'appointments');
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -256,7 +252,7 @@ export default function Appointments() {
                             required
                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-bold"
                             value={formData.type}
-                            onChange={e => setFormData({...formData, type: e.target.value as any})}
+                            onChange={e => setFormData({...formData, type: e.target.value as Appointment['type']})}
                           >
                              <option value="measurement">Measurement</option>
                              <option value="trial">Trial</option>

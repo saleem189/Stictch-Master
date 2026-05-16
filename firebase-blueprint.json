@@ -243,6 +243,26 @@
         "adminResponse": { "type": "string" }
       }
     },
+    "QuoteRequest": {
+      "title": "Quote Request",
+      "description": "Client-submitted bespoke inquiry before order creation",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "garmentType": { "type": "string" },
+        "styleNotes": { "type": "string" },
+        "preferredDueDate": { "type": "string", "format": "date" },
+        "budgetRange": { "type": "string" },
+        "measurementSource": { "type": "string", "enum": ["existing", "book-measurement", "enter-later"] },
+        "inspirationNotes": { "type": "string" },
+        "status": { "type": "string", "enum": ["submitted", "reviewed", "converted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "garmentType", "styleNotes", "preferredDueDate", "budgetRange", "measurementSource", "status"]
+    },
     "Notification": {
       "title": "Notification",
       "description": "System alerts and notifications",
@@ -306,6 +326,7 @@
     "/payments/{paymentId}": { "schema": "Payment", "description": "Financial flows" },
     "/users/{uid}": { "schema": "UserProfile", "description": "User roles and permissions" },
     "/profileRequests/{requestId}": { "schema": "ProfileRequest", "description": "Employee profile change requests" },
+    "/quoteRequests/{requestId}": { "schema": "QuoteRequest", "description": "Client bespoke quote inquiries" },
     "/notifications/{notifId}": { "schema": "Notification", "description": "System alerts" },
     "/recurringTransactions/{txnId}": { "schema": "RecurringTransaction", "description": "Automated ledger entries" },
     "/households/{householdId}": { "schema": "Household", "description": "Group of clients" },

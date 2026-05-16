@@ -64,7 +64,26 @@ const resources = {
       'Payroll History': 'Payroll History',
       'Run Payroll': 'Run Payroll',
       'Financials': 'Financials',
-      'Collect Payment': 'Collect Payment'
+      'Collect Payment': 'Collect Payment',
+      'Admin Portal': 'Admin Portal',
+      'Admin Portal Description': 'Access the StitchMaster Shop Management System. Professional tools for professional artisans.',
+      'Sign in with Google': 'Sign in with Google',
+      'Login domain unauthorized': 'This domain is not authorized for Google login. Add localhost in Firebase Authentication settings.',
+      'Login failed': 'Login failed. Please try again.',
+      'Client Portal': 'Client Portal',
+      'Request Bespoke Quote': 'Request Bespoke Quote',
+      'Track Existing Order': 'Track Existing Order',
+      'Active Orders': 'Active Orders',
+      'Quote Requests': 'Quote Requests',
+      'Measurements': 'Measurements',
+      'Garment Type': 'Garment Type',
+      'Style Notes': 'Style Notes',
+      'Preferred Due Date': 'Preferred Due Date',
+      'Budget Range': 'Budget Range',
+      'Measurement Source': 'Measurement Source',
+      'Inspiration Notes': 'Inspiration Notes',
+      'Submit Quote Request': 'Submit Quote Request',
+      'Quote request submitted': 'Quote request submitted'
     }
   },
   ur: {
@@ -128,7 +147,26 @@ const resources = {
       'Payroll History': 'تنخواہ کی تاریخ',
       'Run Payroll': 'تنخواہ چلائیں',
       'Financials': 'مالیاتی',
-      'Collect Payment': 'ادائیگی وصول کریں'
+      'Collect Payment': 'ادائیگی وصول کریں',
+      'Admin Portal': 'ایڈمن پورٹل',
+      'Admin Portal Description': 'StitchMaster شاپ مینجمنٹ سسٹم تک رسائی۔ پیشہ ور کاریگروں کے لیے پیشہ ور اوزار۔',
+      'Sign in with Google': 'Google کے ساتھ سائن ان کریں',
+      'Login domain unauthorized': 'یہ ڈومین Google لاگ ان کے لیے مجاز نہیں۔ Firebase Authentication سیٹنگز میں localhost شامل کریں۔',
+      'Login failed': 'لاگ ان ناکام ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔',
+      'Client Portal': 'کلائنٹ پورٹل',
+      'Request Bespoke Quote': 'خصوصی قیمت کی درخواست کریں',
+      'Track Existing Order': 'موجودہ آرڈر ٹریک کریں',
+      'Active Orders': 'فعال آرڈرز',
+      'Quote Requests': 'قیمت کی درخواستیں',
+      'Measurements': 'پیمائشیں',
+      'Garment Type': 'لباس کی قسم',
+      'Style Notes': 'اسٹائل نوٹس',
+      'Preferred Due Date': 'ترجیحی آخری تاریخ',
+      'Budget Range': 'بجٹ کی حد',
+      'Measurement Source': 'پیمائش کا ذریعہ',
+      'Inspiration Notes': 'انسپائریشن نوٹس',
+      'Submit Quote Request': 'قیمت کی درخواست جمع کریں',
+      'Quote request submitted': 'قیمت کی درخواست جمع ہو گئی'
     }
   }
 };

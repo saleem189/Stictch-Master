@@ -76,6 +76,19 @@ export type OrderWorkflowStatus =
 
 export type OrderStatus = 'pending' | 'in-progress' | 'ready' | 'delivered' | 'cancelled';
 
+export interface OrderTaskStatus {
+  cutting?: Task['status'];
+  stitching?: Task['status'];
+  finishing?: Task['status'];
+}
+
+export interface AuditTrailEntry {
+  action: string;
+  actor: string;
+  timestamp: string;
+  details: string;
+}
+
 export interface Order {
   id: string;
   clientId: string;
@@ -87,10 +100,12 @@ export interface Order {
   totalAmount: number;
   paidAmount: number;
   advancePayment?: number;
+  assignedTo?: string;
   dueDate: string;
   createdAt: string;
   updatedAt: string;
-  auditTrail: string[]; // IDs of AuditLog entries
+  taskStatus?: OrderTaskStatus;
+  auditTrail: AuditTrailEntry[];
 }
 
 export interface Task {
@@ -123,6 +138,10 @@ export interface FabricRoll {
   remainingLength: number;
   supplierId?: string;
   purchaseDate: string;
+  color?: string;
+  location?: string;
+  status?: 'in-stock' | 'depleted';
+  createdAt?: string;
 }
 
 export interface InventoryItem {
@@ -145,6 +164,9 @@ export interface InventoryLog {
   type: 'usage' | 'restock' | 'adjustment';
   quantity: number;
   actorId: string;
+  performedBy?: string;
+  action?: 'usage' | 'restock' | 'adjustment';
+  notes?: string;
   timestamp: string;
 }
 
@@ -202,7 +224,7 @@ export interface Transaction {
 export interface FinancialTransaction extends Transaction {
   status: 'pending' | 'completed' | 'cancelled';
   category: string;
-  type: string;
+  type: NonNullable<Transaction['type']>;
 }
 
 export interface FinancialDocument {
@@ -247,6 +269,7 @@ export interface Employee {
   role: string;
   salary: number;
   phone: string;
+  email?: string;
   address?: string;
   joinedAt: string;
 }
@@ -298,6 +321,7 @@ export interface UserPermissions {
 }
 
 export interface UserProfile {
+  id?: string;
   uid: string;
   email: string;
   role: UserRole;
@@ -326,6 +350,26 @@ export interface ProfileRequest {
   adminResponse?: string;
 }
 
+export type QuoteRequestStatus = 'submitted' | 'reviewed' | 'converted' | 'rejected';
+
+export type MeasurementSource = 'existing' | 'book-measurement' | 'enter-later';
+
+export interface QuoteRequest {
+  id: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  garmentType: string;
+  styleNotes: string;
+  preferredDueDate: string;
+  budgetRange: string;
+  measurementSource: MeasurementSource;
+  inspirationNotes?: string;
+  status: QuoteRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Appointment {
   id: string;
   clientId: string;
@@ -347,15 +391,20 @@ export interface AuditLog {
   action: string;
   entityType: 'order' | 'measurement' | 'inventory' | 'payment' | 'user';
   entityId: string;
-  beforeState: any;
-  afterState: any;
+  beforeState: unknown;
+  afterState: unknown;
   timestamp: string;
 }
 
 export interface Branch {
   id: string;
   name: string;
-  location: string;
+  location?: string;
+  address: string;
   phone: string;
-  managerId: string;
+  email?: string;
+  manager?: string;
+  managerId?: string;
+  isActive: boolean;
+  createdAt?: string;
 }

@@ -11,8 +11,7 @@ service cloud.firestore {
     function isAdmin() { 
       return isSignedIn() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-        request.auth.token.email == 'saleemayoub1@gmail.com'
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
     }
     function isEmployee() {
@@ -31,10 +30,29 @@ service cloud.firestore {
       return data.uid is string && (data.role in ['admin', 'employee', 'client']) &&
              (!('branchId' in data) || data.branchId is string);
     }
+    function isValidSelfSignup(data, userId) {
+      return data.uid == userId &&
+             data.email == request.auth.token.email &&
+             data.role == 'client' &&
+             data.permissions is map &&
+             data.permissions.canEditMeasurements == false &&
+             data.permissions.canApprovePayroll == false &&
+             data.permissions.canProcessPayments == false &&
+             data.permissions.canAdjustInventory == false &&
+             data.permissions.canDeleteOrders == false &&
+             data.permissions.canViewFinancialReports == false &&
+             data.permissions.canManageEmployees == false &&
+             data.permissions.canManageSystemSettings == false &&
+             data.permissions.canManageInventory == false &&
+             data.permissions.canManageClients == false &&
+             data.permissions.canManageAccounting == false &&
+             data.permissions.canManageOrders == false;
+    }
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow create: if (isAdmin() && isValidUser(incoming())) ||
+                    (isSignedIn() && request.auth.uid == userId && isValidSelfSignup(incoming(), userId));
       allow update: if isAdmin() || (
         isSignedIn() && request.auth.uid == userId && 
         existing().role != 'employee' &&
@@ -83,8 +101,10 @@ service cloud.firestore {
         (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'auditTrail'])) ||
         // Action: Payment
         (incoming().diff(existing()).affectedKeys().hasOnly(['paidAmount', 'updatedAt', 'auditTrail'])) ||
+        // Action: Task status sync
+        (incoming().diff(existing()).affectedKeys().hasOnly(['taskStatus'])) ||
         // Action: Full Update (Admin or Item changes)
-        (isEmployee() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paidAmount', 'items', 'dueDate', 'updatedAt', 'auditTrail', 'advancePayment', 'items']))
+        (isEmployee() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paidAmount', 'items', 'dueDate', 'updatedAt', 'auditTrail', 'advancePayment', 'taskStatus', 'items']))
       );
     }
 
@@ -99,7 +119,7 @@ service cloud.firestore {
     }
     match /inventory/{itemId} {
       allow read: if isEmployee();
-      allow write: if isEmployee() && (incoming().name is string && incoming().quantity is number);
+      allow write: if isEmployee() && (incoming().name is string && incoming().quantity is number && incoming().quantity >= 0);
     }
     match /inventoryLogs/{logId} {
       allow read: if isEmployee();
@@ -130,7 +150,8 @@ service cloud.firestore {
     // Financial Document Rules
     function isValidFinDoc(data) {
       return data.type in ['quotation', 'advance-invoice', 'receipt', 'final-invoice', 'expense', 'payroll', 'refund'] &&
-             data.amount is number && data.amount >= 0;
+             data.amount is number && data.amount >= 0 &&
+             (('orderId' in data) || ('clientId' in data) || ('employeeId' in data) || data.type == 'expense');
     }
     match /financialDocuments/{docId} {
       allow read: if isEmployee();
@@ -160,6 +181,43 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow create: if isSignedIn();
+    }
+
+    // Profile change request rules
+    function isValidProfileRequest(data) {
+      return data.userId is string &&
+             data.userName is string &&
+             data.requestDate is string &&
+             data.suggestedChanges is map &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+    match /profileRequests/{requestId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() &&
+                    incoming().userId == request.auth.uid &&
+                    incoming().status == 'pending' &&
+                    isValidProfileRequest(incoming());
+      allow update: if isAdmin() && isValidProfileRequest(incoming());
+    }
+
+    // Client quote request rules
+    function isValidQuoteRequest(data) {
+      return data.clientId is string &&
+             data.clientId == request.auth.uid &&
+             data.garmentType is string &&
+             data.garmentType.size() > 0 &&
+             data.styleNotes is string &&
+             data.styleNotes.size() > 0 &&
+             data.preferredDueDate is string &&
+             data.budgetRange is string &&
+             data.measurementSource in ['existing', 'book-measurement', 'enter-later'] &&
+             data.status == 'submitted';
+    }
+    match /quoteRequests/{requestId} {
+      allow create: if isSignedIn() && isValidQuoteRequest(incoming());
+      allow read: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
+      allow update: if isEmployee() &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'reviewedBy', 'reviewNotes']);
     }
 
     // Branch Rules
@@ -193,7 +251,7 @@ service cloud.firestore {
     // Notification Rules
     match /notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid || isAdmin());
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid && 
                     incoming().diff(existing()).affectedKeys().hasOnly(['read']);
     }

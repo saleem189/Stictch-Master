@@ -34,8 +34,6 @@ export default function Branches() {
       setBranches(snap.docs.map(d => ({ id: d.id, ...d.data() } as Branch)));
     } catch (e) {
       handleFirestoreError(e, OperationType.GET, 'branches');
-    } finally {
-      setLoading(false);
     }
   }
 

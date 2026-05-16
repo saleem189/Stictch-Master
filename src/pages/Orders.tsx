@@ -8,7 +8,6 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order } from '../types';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useUser } from '../contexts/UserContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 
 export default function Orders() {
@@ -41,14 +40,28 @@ export default function Orders() {
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
+  const escapeHtml = (value: unknown) =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
   const printInvoice = (order: Order) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    const invoiceId = escapeHtml(order.id.slice(0, 8));
+    const createdAt = escapeHtml(new Date(order.createdAt).toLocaleDateString());
+    const clientName = escapeHtml(order.clientName);
+    const clientPhone = escapeHtml(order.clientPhone);
+    const dueDate = escapeHtml(order.dueDate);
+
     const html = `
       <html>
         <head>
-          <title>Invoice #${order.id.slice(0, 8)}</title>
+          <title>Invoice #${invoiceId}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
             body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; line-height: 1.5; }
@@ -70,20 +83,20 @@ export default function Orders() {
           <div class="header">
             <div class="logo">Tailoring Empire</div>
             <div class="invoice-info">
-              <div style="font-weight: 900;">INVOICE #${order.id.slice(0, 8)}</div>
-              <div style="color: #64748b; font-size: 12px;">Date: ${new Date(order.createdAt).toLocaleDateString()}</div>
+              <div style="font-weight: 900;">INVOICE #${invoiceId}</div>
+              <div style="color: #64748b; font-size: 12px;">Date: ${createdAt}</div>
             </div>
           </div>
 
           <div class="section" style="display: grid; grid-template-cols: 1fr 1fr; gap: 40px;">
             <div>
               <div class="title">Billed To</div>
-              <div style="font-weight: 900;">${order.clientName}</div>
-              <div style="color: #64748b;">${order.clientPhone || ''}</div>
+              <div style="font-weight: 900;">${clientName}</div>
+              <div style="color: #64748b;">${clientPhone}</div>
             </div>
             <div style="text-align: right;">
               <div class="title">Due Date</div>
-              <div style="font-weight: 900;">${order.dueDate}</div>
+              <div style="font-weight: 900;">${dueDate}</div>
             </div>
           </div>
 
@@ -98,8 +111,8 @@ export default function Orders() {
             <tbody>
               ${order.items.map(item => `
                 <tr>
-                  <td style="font-weight: 700;">${item.type}</td>
-                  <td style="color: #64748b;">${item.description}</td>
+                  <td style="font-weight: 700;">${escapeHtml(item.type)}</td>
+                  <td style="color: #64748b;">${escapeHtml(item.description)}</td>
                   <td style="text-align: right; font-weight: 700;">Rs. ${item.price.toLocaleString()}</td>
                 </tr>
               `).join('')}

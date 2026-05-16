@@ -4,7 +4,6 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Client, Employee, FinancialDocument, Order } from '../types';
 import { X, DollarSign, Plus, Trash2, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
 
 interface Props {
@@ -14,7 +13,6 @@ interface Props {
 }
 
 export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: Props) {
-  const { t } = useTranslation();
   const { profile } = useUser();
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -64,9 +62,11 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
     setFormData({ ...formData, items: newItems, amount: newAmount });
   };
 
-  const updateItem = (index: number, field: string, value: string | number) => {
+  type LineItem = NonNullable<FinancialDocument['items']>[number];
+
+  const updateItem = (index: number, field: keyof LineItem, value: string | number) => {
     const newItems = [...formData.items];
-    (newItems[index] as any)[field] = value;
+    newItems[index] = { ...newItems[index], [field]: value };
     newItems[index].amount = newItems[index].quantity * newItems[index].rate;
     const newAmount = newItems.reduce((sum, item) => sum + item.amount, 0);
     setFormData({ ...formData, items: newItems, amount: newAmount });
@@ -80,7 +80,7 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
       const employee = employees.find(e => e.id === formData.employeeId);
       const order = orders.find(o => o.id === formData.orderId);
 
-      const docRef = await addDoc(collection(db, 'financialDocuments'), {
+      await addDoc(collection(db, 'financialDocuments'), {
         ...formData,
         clientName: client?.name || 'N/A',
         employeeName: employee?.name || 'N/A',
@@ -135,7 +135,7 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
                    required
                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 font-bold appearance-none"
                    value={formData.type}
-                   onChange={e => setFormData({...formData, type: e.target.value as any})}
+                   onChange={e => setFormData({...formData, type: e.target.value as FinancialDocument['type']})}
                  >
                     <option value="quotation">Quotation</option>
                     <option value="advance-invoice">Advance Invoice</option>

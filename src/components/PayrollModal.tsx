@@ -4,7 +4,6 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee, PayrollRecord, Account } from '../types';
 import { X, Zap, ShieldCheck, AlertCircle, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
 

@@ -1,51 +1,76 @@
-# Gemini AI Integration Patterns
+# AI Integration Patterns
 
-This document outlines how to integrate Gemini AI features into the Tailoring Empire ERP.
+This project currently ships without an active AI feature in the production UI. Future AI work should be added behind a server-side boundary so private API keys are never exposed in the browser bundle.
 
-## 1. Core Model Strategy
-- **Primary Model:** `gemini-1.5-flash` for high-speed, cost-effective operational intelligence.
-- **Secondary Model:** `gemini-1.5-pro` for complex analytical reports or style synthesis.
+## 1. Candidate Features
 
-## 2. Intelligence Features
+### Measurement Synthesis
 
-### 2.1. Measurement Synthesis (Proposed)
-- **Goal:** Convert raw numbers into descriptive fitting advice.
-- **Prompt Pattern:**
-  ```text
-  You are an expert master tailor. Given the measurements: {{measurements}}, 
-  generate a brief (1-sentence) fitting profile in {{language}}.
-  ```
-- **UI Spot:** Appears in `ClientDetails` modal as a "Tailor's Insight" badge.
+Convert raw measurements into a short fitting summary for staff.
 
-### 2.2. Style Advice & Upselling
-- **Goal:** Analyze client order history to suggest fabric types or silhouettes.
-- **Prompt Pattern:**
-  ```text
-  Client History: {{orders}}. 
-  Recent Trending Fabrics: {{inventory}}.
-  Suggest 3 combinations that match this client's profile.
-  ```
+Prompt shape:
 
-### 2.3. Voice-to-Order Entries
-- **Goal:** Allow masters to dictate measurements while hands are busy.
-- **Technicality:** Use Gemini Multimodal capabilities to parse audio blobs directly into structured JSON measurement objects.
+```text
+You are an expert master tailor. Given these anonymized measurements:
+{{measurements}}
 
-## 3. Implementation Pattern
+Generate a one-sentence fitting profile in {{language}}.
+```
 
-```typescript
-import { GoogleGenAI } from "@google/genai";
+### Style Advice
 
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY!);
+Suggest garment/fabric combinations from anonymized order history and inventory trends.
 
-export async function generateTailorInsight(measurements: any, lang: string) {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const prompt = `Translate these measurements into a master tailor's fitting summary in ${lang}: ${JSON.stringify(measurements)}`;
-  
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+Prompt shape:
+
+```text
+Client order patterns:
+{{anonymousOrderSummary}}
+
+Available fabric categories:
+{{inventorySummary}}
+
+Suggest three fitting garment directions in {{language}}.
+```
+
+### Voice-to-Measurement Entry
+
+Parse a tailor's spoken measurements into structured JSON. This should require confirmation before saving to Firestore.
+
+## 2. Implementation Rules
+
+- Do not inject private API keys into Vite client code.
+- Put AI calls behind a server, Firebase Function, or trusted backend service.
+- Do not send names, phone numbers, email addresses, or full addresses to an AI provider.
+- Use anonymized IDs or aggregate summaries.
+- Store AI-generated output as advisory text only; staff must confirm before it changes orders or measurements.
+- Respect current `i18n.language` and explicitly request English or Urdu output.
+
+## 3. Suggested Server Boundary
+
+```ts
+interface TailorInsightRequest {
+  language: 'en' | 'ur';
+  measurements: Record<string, number>;
+}
+
+interface TailorInsightResponse {
+  summary: string;
 }
 ```
 
-## 4. Safety & Standards
-- **PII Protection:** Never send client names or sensitive contact info to the API. Only send anonymized measurements or ID-less history.
-- **Bilingual Response:** Always specify the target language (${lang}) in the prompt to match the user's current locale.
+Client flow:
+
+1. Client or staff opens a measurement profile.
+2. UI calls a trusted endpoint with anonymized measurements.
+3. Endpoint calls the AI provider.
+4. UI shows the response as an advisory badge.
+5. Staff confirms before saving any derived notes.
+
+## 4. Safety Checklist
+
+- [ ] No secret key in browser bundle.
+- [ ] No personally identifiable information in prompts.
+- [ ] Prompt includes target language.
+- [ ] Output is labeled as advisory.
+- [ ] Firestore writes still go through existing validation and rules.

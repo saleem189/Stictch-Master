@@ -22,7 +22,8 @@ import { signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { UserProvider, useUser } from './contexts/UserContext';
 import NotificationBell from './components/NotificationBell';
 import LanguageToggle from './components/LanguageToggle';
-import { Toaster } from 'react-hot-toast';
+import BrandLogo from './components/BrandLogo';
+import { toast, Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { useEffect } from 'react';
 
@@ -38,6 +39,9 @@ import Employees from './pages/Employees';
 import Profile from './pages/Profile';
 import Appointments from './pages/Appointments';
 import Branches from './pages/Branches';
+import ClientDashboard from './pages/ClientDashboard';
+import RequestQuote from './pages/RequestQuote';
+import { canAccessAdminRoutes, canAccessClientRoutes, getRoleLandingPath } from './lib/roleRouting';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const SidebarItem = ({ to, icon: Icon, label, active, key }: { to: string, icon: any, label: string, active: boolean, key?: string }) => (
@@ -95,8 +99,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-slate-300">
       <div className="h-16 flex items-center gap-3 px-6 border-b border-white/5">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg leading-none shadow-lg shadow-indigo-500/20">S</div>
-        <span className="text-lg font-bold tracking-tight text-white italic">StitchMaster</span>
+        <BrandLogo dark markClassName="h-9 w-9 rounded-xl" textClassName="text-lg italic" />
       </div>
       
       <div className="p-4 flex-1 space-y-6 overflow-y-auto">
@@ -182,8 +185,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
               <Menu size={24} />
             </button>
             <Link to="/admin" className="text-slate-800 font-bold lg:hidden flex items-center gap-2">
-              <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-sm leading-none">S</div>
-              <span className="tracking-tight italic font-black">StitchMaster</span>
+              <BrandLogo markClassName="h-8 w-8 rounded-xl" textClassName="text-base italic" />
             </Link>
             <div className="hidden lg:flex items-center gap-2 text-slate-400">
                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80">{location.pathname.split('/').slice(-1)[0] || 'Dashboard'}</span>
@@ -236,27 +238,36 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
 };
 
 const Login = () => {
-  const handleLogin = () => {
+  const { t } = useTranslation();
+
+  const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
-    signInWithPopup(auth, provider);
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      const errorCode = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+      if (errorCode === 'auth/unauthorized-domain') {
+        toast.error(t('Login domain unauthorized'));
+        return;
+      }
+      toast.error(t('Login failed'));
+      console.error('Login failed:', error);
+    }
   };
 
   return (
     <div className="min-h-[100dvh] bg-slate-950 flex flex-col">
       <nav className="p-8">
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-            <Scissors size={20} />
-          </div>
-          <span className="text-xl font-black tracking-tight text-white">STITCH<span className="text-indigo-600">MASTER</span></span>
+          <BrandLogo dark markClassName="h-11 w-11 rounded-2xl" textClassName="text-xl" />
         </Link>
       </nav>
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-md w-full space-y-8 bg-white p-12 rounded-3xl shadow-2xl">
           <div className="text-center space-y-4">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tight">Admin Portal</h2>
+            <h2 className="text-4xl font-black text-slate-900 tracking-tight">{t('Admin Portal')}</h2>
             <p className="text-slate-500 font-medium">
-              Access the StitchMaster Shop Management System. Professional tools for professional artisans.
+              {t('Admin Portal Description')}
             </p>
           </div>
           <button
@@ -264,7 +275,7 @@ const Login = () => {
             className="w-full flex items-center justify-center gap-4 py-4 px-6 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-[0.98]"
           >
             <UserCircle size={20} />
-            Sign in with Google
+            {t('Sign in with Google')}
           </button>
         </div>
       </div>
@@ -273,7 +284,13 @@ const Login = () => {
 };
 
 function AppContent() {
-  const { user, loading, isAdmin } = useUser();
+  const { user, profile, loading, isAdmin } = useUser();
+  const location = useLocation();
+  const role = profile?.role;
+  const landingPath = getRoleLandingPath(role);
+  const state = location.state as { from?: string } | null;
+  const requestedPath = state?.from;
+  const postLoginPath = role === 'client' && requestedPath?.startsWith('/client') ? requestedPath : landingPath;
 
   if (loading) return (
     <div className="h-[100dvh] flex items-center justify-center bg-slate-50">
@@ -286,11 +303,31 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/login" element={!user ? <Login /> : <Navigate to="/admin" />} />
+      <Route path="/login" element={!user ? <Login /> : <Navigate to={postLoginPath} />} />
+
+      <Route path="/client" element={
+        user && canAccessClientRoutes(role) ? (
+          <ClientDashboard />
+        ) : user ? (
+          <Navigate to={landingPath} />
+        ) : (
+          <Navigate to="/login" state={{ from: location.pathname }} />
+        )
+      } />
+
+      <Route path="/client/request-quote" element={
+        user && canAccessClientRoutes(role) ? (
+          <RequestQuote />
+        ) : user ? (
+          <Navigate to={landingPath} />
+        ) : (
+          <Navigate to="/login" state={{ from: location.pathname }} />
+        )
+      } />
       
       {/* Protected Admin Routes */}
       <Route path="/admin/*" element={
-        user ? (
+        user && canAccessAdminRoutes(role) ? (
           <AdminLayout>
             <Routes>
               <Route index element={<Dashboard />} />
@@ -309,8 +346,10 @@ function AppContent() {
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Routes>
           </AdminLayout>
+        ) : user ? (
+          <Navigate to="/" />
         ) : (
-          <Navigate to="/login" />
+          <Navigate to="/login" state={{ from: location.pathname }} />
         )
       } />
       

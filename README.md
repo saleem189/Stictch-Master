@@ -1,43 +1,107 @@
-# Tailoring Empire ERP
+# Tailoring ERP
 
-A sophisticated, bilingual (English/Urdu) Enterprise Resource Planning system built for modern tailoring businesses.
+A bilingual tailoring business platform for client-facing quote requests and role-based ERP operations.
 
-## 🚀 Features
+![Tailoring ERP logo](./src/assets/stitchmaster-logo.png)
 
-- **Intelligence Dashboard**: Real-time business overview and live tracking.
-- **Client Management**: Comprehensive measurement logs and customer history.
-- **Operations & Staff**: Employee performance tracking, role-based access, and payroll management.
-- **Inventory Control**: Real-time monitoring of fabrics, threads, and supplies.
-- **Financial Ledger**: Double-entry accounting with automated reports.
-- **Bilingual Interface**: Seamless switching between English and Urdu with full RTL support.
+## Current Product Shape
 
-## 🛠 Tech Stack
+- **Public storefront:** Marketing homepage, service positioning, and order tracking entry point.
+- **Client portal:** Authenticated clients land on `/client`, can view their orders and quote requests, and can request a bespoke quote.
+- **Admin/employee ERP:** Staff land on `/admin` and use operational dashboards for orders, clients, appointments, inventory, accounting, payroll, vendors, and branches.
+- **Bespoke inquiry flow:** `/client/request-quote` creates a `quoteRequests` Firestore document. It does not immediately create orders, payments, or ledger entries.
+- **Bilingual foundation:** English/Urdu strings live in `src/lib/i18n.ts`; Urdu uses RTL document direction.
 
-- **Frontend**: React, Vite, Tailwind CSS, Framer Motion
-- **Backend/DB**: Firebase Auth & Firestore
-- **State Management**: React Context API
-- **Internationalization**: i18next
+## Tech Stack
 
-## 📖 Documentation
+- **Frontend:** React 19, Vite, Tailwind CSS v4, Motion, Lucide React
+- **Backend:** Firebase Authentication and Cloud Firestore
+- **Charts:** Recharts
+- **Testing:** Vitest, Testing Library setup, TypeScript, ESLint
 
-For detailed information, please refer to:
-- [**Technical Docs**](./TECHNICAL_DOCS.md): Architecture, Data Models, and Coding Standards.
-- [**Agent Instructions**](./AGENTS.md): Context and rules for AI agents working on this project.
+## Key Routes
 
-## 🚦 Getting Started
+- `/` public storefront
+- `/login` shared Google login
+- `/client` client dashboard
+- `/client/request-quote` bespoke quote request form
+- `/admin/*` admin and employee ERP dashboard
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
-2. **Run Development Server**:
-   ```bash
-   npm run dev
-   ```
-3. **Build for Production**:
-   ```bash
-   npm run build
-   ```
+Role routing is centralized in `src/lib/roleRouting.ts`.
 
-## 🔐 Security
-The application uses hardened Firestore Security Rules. Ensure `firestore.rules` is updated and deployed whenever the data schema changes.
+## Firestore Collections
+
+Core collections are documented in `firebase-blueprint.json`.
+
+Important current collections include:
+
+- `users`
+- `clients`
+- `orders`
+- `quoteRequests`
+- `measurements`
+- `appointments`
+- `inventory`
+- `fabricRolls`
+- `inventoryLogs`
+- `employees`
+- `tasks`
+- `payrollRecords`
+- `accounts`
+- `transactions`
+- `payments`
+- `financialDocuments`
+- `vendors`
+- `vendorBills`
+- `notifications`
+- `profileRequests`
+- `recurringTransactions`
+- `households`
+- `branches`
+
+## Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the development server:
+
+```bash
+npm run dev
+```
+
+Run verification:
+
+```bash
+npm test
+npm run lint
+npm run build
+```
+
+In this Codex Windows environment, Node may need to be invoked directly:
+
+```powershell
+& 'C:\Program Files\nodejs\node.exe' .\node_modules\vitest\vitest.mjs run
+& 'C:\Program Files\nodejs\node.exe' .\node_modules\typescript\bin\tsc --noEmit
+& 'C:\Program Files\nodejs\node.exe' .\node_modules\eslint\bin\eslint.js .
+& 'C:\Program Files\nodejs\node.exe' .\node_modules\vite\bin\vite.js build
+```
+
+## Security Notes
+
+- Deploy `firestore.rules` whenever Firestore schema or route behavior changes.
+- New self-created users default to `client`.
+- Admin/employee access is derived from role documents in `users`.
+- Client quote requests are scoped to the authenticated user's `uid`.
+- Do not expose private AI/API keys in the browser bundle.
+
+## Documentation
+
+- `AGENTS.md`: source of truth for AI agents and implementation standards.
+- `TECHNICAL_SPEC.md`: architecture, route map, data model, and workflows.
+- `security_spec.md`: security invariants and denial-test scenarios.
+- `GEMINI.md`: future AI integration patterns and safety notes.
+- `AUDIT_REPORT.md`: latest production audit and remaining risks.

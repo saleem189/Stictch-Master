@@ -1,76 +1,125 @@
 # AI Agent Instructions & Project Context
 
-This file is the **Source of Truth** for AI agents working on the Tailoring Empire ERP. It contains the complete architectural blueprint, technical standards, and operational flows.
+This file is the source of truth for AI agents working on Tailoring ERP.
 
 ## 1. Project Identity
-- **Name:** Tailoring Empire ERP
-- **Mission:** A high-end, bilingual (English/Urdu) Enterprise Resource Planning system for bespoke tailoring businesses.
-- **Aesthetic:** High-contrast, "Intelligence" focused, bold typography (italic headings), heavy use of rounded corners (`rounded-3xl`), and a clean, professional "Swiss/Modern" feel.
-- **Design Paradigm:** "Matrix of Information" — density without clutter, using bento grids and layered modals.
 
-## 2. Technical Stack & Directory Mapping
+- **Name:** Tailoring ERP
+- **Mission:** A high-end, bilingual Enterprise Resource Planning and client portal system for bespoke tailoring businesses.
+- **Brand asset:** `src/assets/stitchmaster-logo.png`
+- **Brand component:** `src/components/BrandLogo.tsx`
+- **Aesthetic:** high-contrast, intelligence-focused, bold italic headings, rounded containers, and Swiss/Modern visual structure.
+- **Design paradigm:** matrix of information for staff surfaces; polished storefront/account experience for client surfaces.
 
-### Core Technologies
-- **Frontend:** React 18+ (Vite), Tailwind CSS v4, Lucide Icons, Framer Motion.
+## 2. Product Surfaces
+
+### Public Storefront
+
+- Route: `/`
+- Purpose: explain the tailoring business, promote bespoke quote requests, and expose order tracking.
+- Primary CTA: `Request Bespoke Quote`.
+
+### Client Portal
+
+- Route: `/client`
+- Purpose: client-owned order overview, quote request history, measurement status, and account actions.
+- Quote route: `/client/request-quote`
+- Quote requests create `quoteRequests` documents with `status: submitted`.
+
+### Admin/Employee ERP
+
+- Route: `/admin/*`
+- Purpose: operations, production, clients, appointments, inventory, finances, payroll, vendors, and branches.
+- Employees can access operational modules.
+- Admin-only routes include vendors, accounting, employees, and branches.
+
+## 3. Technical Stack & Directory Mapping
+
+- **Frontend:** React 19, Vite, Tailwind CSS v4, Lucide Icons, Motion.
 - **Backend:** Cloud Firestore, Firebase Authentication.
-- **i18n:** i18next & react-i18next (English/Urdu).
-- **Visualization:** Recharts & D3.
+- **i18n:** i18next and react-i18next for English/Urdu.
+- **Visualization:** Recharts.
+- **Tests:** Vitest with jsdom setup.
 
-### Directory Structure
-- `src/components`: Atomic UI components and feature-specific modals (Orders, Payroll, etc.).
-- `src/pages`: Top-level route components.
-- `src/contexts`: Global state providers (User/Auth).
-- `src/lib`: Core logic (Firebase, i18n, validation, automation, export).
-- `src/services`: External integrations (Notifications).
-- `src/types.ts`: Centralized TypeScript interfaces.
+Directory map:
 
-## 3. Standards & Conventions
+- `src/components`: shared UI and feature modals.
+- `src/pages`: top-level route components.
+- `src/contexts`: auth/user providers.
+- `src/lib`: Firebase, i18n, validation, routing, finance, automation, export helpers.
+- `src/services`: external service integrations.
+- `src/types.ts`: centralized TypeScript interfaces.
+- `firebase-blueprint.json`: Firestore schema documentation.
+- `firestore.rules`: deployed access model.
 
-### UI/UX Rules
-1. **Bilingual:** NEVER hardcode strings. Use `t()`. Urdu is RTL.
-2. **Typography:**
-   - Headings: `font-black text-slate-900 tracking-tight italic uppercase`.
-   - Labels: `text-[10px] font-black text-slate-400 uppercase tracking-widest`.
-3. **Containers:** `bg-white rounded-[2.5rem] border border-slate-200 shadow-sm`.
-4. **Validation:** Use `src/lib/validation.ts`. Show errors in red with `AlertCircle`.
+## 4. Standards & Conventions
 
-### Data Intelligence Rules
-1. **Error Handling:** Use `handleFirestoreError` for ALL Firestore operations.
-2. **Relational Sync:** 
-   - Payments must sync between `orders`, `transactions`, `financialDocuments`, and `accounts`.
-   - Use `increment()` for atomic balance updates.
-3. **Audit Trails:** Mandatory for Orders and Personnel activity.
+### UI/UX
 
-## 4. Detailed Module Flows
+1. Do not hardcode new user-visible strings when a surface is already using i18n. Add keys to `src/lib/i18n.ts`.
+2. Urdu must respect RTL document direction.
+3. Headings use `font-black text-slate-900 tracking-tight italic uppercase`.
+4. Labels use `text-[10px] font-black text-slate-400 uppercase tracking-widest`.
+5. Main containers use `bg-white rounded-[2.5rem] border border-slate-200 shadow-sm`.
+6. Use `BrandLogo` for app identity instead of recreating logo markup.
+7. Use `AlertCircle` and red text for visible validation errors.
 
-### 4.1. The Order Lifecycle
-1. **Creation:** Linked to `Client` and `Branch`. Audit log entry: "Order Created".
-2. **Workflow:** 
-   - `Pending` (Initial)
-   - `In-Progress` (Assigned to cutting/stitching)
-   - `Ready` (Ready for trial or pickup)
-   - `Delivered` (Terminal - triggers final receipt)
-3. **Financials:** 
-   - `totalAmount` is calculated from item prices.
-   - `paidAmount` tracks total receipts.
-   - Payments record a `Transaction` (type: 'sale').
+### Data and Firestore
 
-### 4.2. Financial Matrix (Accounting)
-- **Automatic Ledger:** Every transaction must have a `debitAccountId` (e.g., Cash) and `creditAccountId` (e.g., Sales Revenue).
-- **Documents:** `quotation` (pre-sale), `advance-invoice` (deposit), `receipt` (payment check), `final-invoice` (at delivery).
-- **Calculations:** Dashboard uses `accounting` module data for MTD Revenue and Receivables.
+1. Use `handleFirestoreError` for Firestore operations.
+2. Add new collection paths to `firebase-blueprint.json`.
+3. Add or update `firestore.rules` for every new collection or subcollection.
+4. Keep client-owned data scoped to `request.auth.uid`.
+5. Payments must sync between orders, payments, transactions, financial documents, and accounts.
+6. Prefer `writeBatch` or `runTransaction` for multi-document financial writes.
+7. Orders and personnel activity require audit trails.
 
-### 4.3. Resource Management (Inventory & Personnel)
-- **Inventory:** Tracks fabric yardage and notions. Low stock alert triggered at `minLevel`.
-- **Personnel:** Tracks `Employee` records. Payroll auto-calculates based on salary structure and generated transactions.
+### Routing
 
-## 5. Security & Maintenance
-- **Rules:** Access mapped in `firestore.rules`. Admins checked via `/admins/` collection.
-- **Reporting:** Export operational data using `exportToCSV` from `src/lib/exportUtils.ts`.
-- **AI Readiness:** See `GEMINI.md` for prompt engineering patterns.
+Role routing lives in `src/lib/roleRouting.ts`.
 
-## 6. Development Checklist for Future Agents
-- [ ] Check if new strings are added to `src/lib/i18n.ts`.
-- [ ] Ensure new Firestore paths are added to `firebase-blueprint.json`.
-- [ ] Verify `firestore.rules` for every new subcollection.
-- [ ] Use `motion/react` for all state-driven UI entrances.
+- `admin` -> `/admin`
+- `employee` -> `/admin`
+- `client` -> `/client`
+- unknown -> `/`
+
+Do not duplicate role-routing logic inside page components.
+
+## 5. Current Module Flows
+
+### Quote Request Flow
+
+1. Public or signed-in client clicks `Request Bespoke Quote`.
+2. Unauthenticated users are redirected through `/login`.
+3. Client users continue to `/client/request-quote`.
+4. Form validation is handled by `src/lib/quoteRequests.ts`.
+5. A `quoteRequests` document is created with `status: submitted`.
+6. Staff quote review and quote-to-order conversion are future modules.
+
+### Order Lifecycle
+
+1. Order is linked to `Client` and `Branch`.
+2. Global status: `pending`, `in-progress`, `ready`, `delivered`, `cancelled`.
+3. Item workflow can track granular production stages such as measurement, cutting, stitching, trial, and finishing.
+4. Payment status is tracked through `paidAmount` against `totalAmount`.
+
+### Financial Matrix
+
+- Every transaction should include `debitAccountId` and `creditAccountId`.
+- Documents include quotation, advance invoice, receipt, final invoice, expense, payroll, and refund.
+- Dashboard uses orders, transactions, inventory, and accounting data for operational intelligence.
+
+### Inventory and Personnel
+
+- Inventory tracks quantity, minimum levels, roll tracking, and stock logs.
+- Personnel tracks employees, tasks, payroll records, and linked users.
+
+## 6. Development Checklist
+
+- [ ] Add user-visible strings to `src/lib/i18n.ts`.
+- [ ] Add new data shapes to `src/types.ts`.
+- [ ] Add new Firestore paths to `firebase-blueprint.json`.
+- [ ] Update `firestore.rules` for new collections.
+- [ ] Add focused unit tests for pure helpers and business rules.
+- [ ] Run `npm test`, `npm run lint`, and `npm run build`.
+- [ ] If Node is not on PATH in Codex, run commands through `C:\Program Files\nodejs\node.exe`.

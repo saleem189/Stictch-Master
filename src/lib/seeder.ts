@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, setDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { 
   Branch, 
@@ -6,10 +6,8 @@ import {
   Client, 
   InventoryItem, 
   Account, 
-  Order, 
-  Transaction, 
-  FinancialDocument,
-  OrderWorkflowStatus
+  Order,
+  Measurements
 } from '../types';
 
 const SEED_BRANCHES: Partial<Branch>[] = [
@@ -114,7 +112,7 @@ export async function seedDatabase() {
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
         items: [
-          { id: 'item1', type: 'Shalwar Kameez', description: 'Cream Wash & Wear', price: 12500, status: 'stitching', dueDate: now.toISOString(), measurements: SEED_CLIENTS[0].measurements as any }
+          { id: 'item1', type: 'Shalwar Kameez', description: 'Cream Wash & Wear', price: 12500, status: 'stitching', dueDate: now.toISOString(), measurements: SEED_CLIENTS[0].measurements as Measurements }
         ],
         auditTrail: []
       },
@@ -130,7 +128,7 @@ export async function seedDatabase() {
         createdAt: lastMonth.toISOString(),
         updatedAt: now.toISOString(),
         items: [
-          { id: 'item2', type: 'Sherwani', description: 'Black Heavy Embroidered', price: 25000, status: 'ready', dueDate: now.toISOString(), measurements: SEED_CLIENTS[1].measurements as any }
+          { id: 'item2', type: 'Sherwani', description: 'Black Heavy Embroidered', price: 25000, status: 'ready', dueDate: now.toISOString(), measurements: SEED_CLIENTS[1].measurements as Measurements }
         ],
         auditTrail: []
       }

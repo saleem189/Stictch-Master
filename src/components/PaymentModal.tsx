@@ -4,6 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order } from '../types';
 import { X, DollarSign, CreditCard } from 'lucide-react';
 import { motion } from 'motion/react';
+import { calculateRemainingBalance, getStatusAfterPayment } from '../lib/orderFinance';
 
 interface Props {
   order: Order;
@@ -12,7 +13,7 @@ interface Props {
 }
 
 export default function PaymentModal({ order, onClose, onSuccess }: Props) {
-  const [amount, setAmount] = useState(order.totalAmount - order.paidAmount);
+  const [amount, setAmount] = useState(calculateRemainingBalance(order));
   const [method, setMethod] = useState('Cash');
   const [submitting, setSubmitting] = useState(false);
 
@@ -25,7 +26,7 @@ export default function PaymentModal({ order, onClose, onSuccess }: Props) {
       // 1. Update Order paidAmount
       await updateDoc(doc(db, 'orders', order.id), {
         paidAmount: increment(amount),
-        status: amount + order.paidAmount >= order.totalAmount ? 'delivered' : order.status
+        status: getStatusAfterPayment(order, amount)
       });
 
       // 2. Create Payment Record
@@ -80,7 +81,7 @@ export default function PaymentModal({ order, onClose, onSuccess }: Props) {
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
              <div>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Order Balance</p>
-                <p className="text-xl font-bold text-slate-900 font-mono">Rs. {(order.totalAmount - order.paidAmount).toLocaleString()}</p>
+                <p className="text-xl font-bold text-slate-900 font-mono">Rs. {calculateRemainingBalance(order).toLocaleString()}</p>
              </div>
              <CreditCard className="text-slate-300" size={32} />
           </div>

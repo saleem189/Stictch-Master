@@ -9,6 +9,12 @@ import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
 
+type ClientFormData = Partial<Client> & {
+  notes?: string;
+};
+
+const historyTabs = ['timeline', 'measurements', 'gallery'] as const;
+
 export default function Clients() {
   const { t } = useTranslation();
   const { profile } = useUser();
@@ -26,7 +32,7 @@ export default function Clients() {
   const [viewingTab, setViewingTab] = useState<'timeline' | 'measurements' | 'gallery'>('timeline');
 
   // Form State
-  const [formData, setFormData] = useState<Partial<Client>>({
+  const [formData, setFormData] = useState<ClientFormData>({
     name: '',
     phone: '',
     address: '',
@@ -84,7 +90,7 @@ export default function Clients() {
     e.preventDefault();
     
     // Validate
-    const { isValid, errors } = validateForm(formData, {
+    const { isValid, errors } = validateForm(formData as Record<string, unknown>, {
       name: validators.required('Customer name is required'),
       phone: validators.phone('Invalid phone format'),
       address: validators.required('Address is required')
@@ -121,7 +127,7 @@ export default function Clients() {
         date: new Date().toISOString(),
         measurements: formData.measurements,
         recordedBy: profile?.name || profile?.email || 'Unknown',
-        notes: (formData as any).notes || ''
+        notes: formData.notes || ''
       });
 
       setIsAdding(false);
@@ -380,10 +386,10 @@ export default function Clients() {
               </header>
 
               <div className="flex bg-slate-900 border-b border-indigo-900/50 p-2">
-                 {['timeline', 'measurements', 'gallery'].map((tab) => (
+                 {historyTabs.map((tab) => (
                     <button
                       key={tab}
-                      onClick={() => setViewingTab(tab as any)}
+                      onClick={() => setViewingTab(tab)}
                       className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                         viewingTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
                       }`}
@@ -532,8 +538,8 @@ export default function Clients() {
                         rows={2}
                         placeholder="Additional notes about measurements..."
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-bold resize-none"
-                        value={(formData as any).notes || ''}
-                        onChange={e => setFormData({...formData, notes: e.target.value} as any)}
+                        value={formData.notes || ''}
+                        onChange={e => setFormData({...formData, notes: e.target.value})}
                       />
                     </div>
                   </div>

@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Scissors, Ruler, CheckCircle2, Search, ArrowRight, Star, Clock, ShieldCheck } from 'lucide-react';
+import { Ruler, CheckCircle2, Search, ArrowRight, Star, Clock, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order } from '../types';
+import { useTranslation } from 'react-i18next';
+import BrandLogo from '../components/BrandLogo';
 
 export default function Home() {
+  const { t } = useTranslation();
   const [orderQuery, setOrderQuery] = useState('');
   const [orderStatus, setOrderStatus] = useState<Order | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [heroImageLoaded, setHeroImageLoaded] = useState(false);
 
   const checkStatus = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,10 +47,7 @@ export default function Home() {
       <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-xl z-50 border-b border-slate-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-200 group transition-transform hover:rotate-12">
-              <Scissors size={20} className="sm:w-6 sm:h-6" />
-            </div>
-            <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 leading-none">STITCH<span className="text-indigo-600">MASTER</span></span>
+            <BrandLogo markClassName="h-11 w-11 sm:h-12 sm:w-12" textClassName="text-xl sm:text-2xl leading-none" />
           </div>
           
           <div className="flex items-center gap-4 sm:gap-10">
@@ -55,7 +56,10 @@ export default function Home() {
               <a href="#tracking" className="hover:text-indigo-600 transition-colors">Tracking</a>
               <a href="#contact" className="hover:text-indigo-600 transition-colors">Philosophy</a>
             </div>
-            <Link to="/orders" className="px-5 sm:px-7 py-2.5 sm:py-3.5 bg-slate-950 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">Admin Console</Link>
+            <Link to="/admin" className="px-4 sm:px-7 py-2.5 sm:py-3.5 bg-slate-950 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest whitespace-nowrap hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">
+              <span className="sm:hidden">Admin</span>
+              <span className="hidden sm:inline">Admin Console</span>
+            </Link>
           </div>
         </div>
       </nav>
@@ -80,11 +84,11 @@ export default function Home() {
               We've digitized the bespoke experience. High-end tailoring meets modern efficiency for the modern individual who demands excellence in every thread.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <a href="#tracking" className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-100 group">
-                Trace Your Order <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </a>
-              <a href="#services" className="px-10 py-5 bg-white border border-slate-200 text-slate-900 rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-slate-50 transition-all flex items-center justify-center">
-                Explore Studio
+              <Link to="/client/request-quote" className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-100 group">
+                {t('Request Bespoke Quote')} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <a href="#tracking" className="px-10 py-5 bg-white border border-slate-200 text-slate-900 rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-slate-50 transition-all flex items-center justify-center">
+                {t('Track Existing Order')}
               </a>
             </div>
           </motion.div>
@@ -95,12 +99,26 @@ export default function Home() {
             transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
             className="relative"
           >
-            <div className="aspect-[4/5] rounded-[3rem] overflow-hidden shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] relative z-10 border-8 border-white">
+            <div className="aspect-[4/5] rounded-[3rem] overflow-hidden shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] relative z-10 border-8 border-white bg-slate-900">
+              {!heroImageLoaded && (
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,0.35),transparent_30%),linear-gradient(145deg,#111827_0%,#334155_55%,#f8fafc_100%)]">
+                  <div className="absolute inset-x-10 bottom-12 space-y-4 text-white">
+                    <div className="h-3 w-24 rounded-full bg-white/60" />
+                    <div className="h-2 w-44 rounded-full bg-white/30" />
+                    <div className="grid grid-cols-3 gap-3 pt-4">
+                      <div className="h-20 rounded-2xl bg-white/10 border border-white/10" />
+                      <div className="h-20 rounded-2xl bg-white/20 border border-white/10" />
+                      <div className="h-20 rounded-2xl bg-white/10 border border-white/10" />
+                    </div>
+                  </div>
+                </div>
+              )}
               <img 
                 src="https://images.unsplash.com/photo-1594932224828-b4b059b6f6f9?q=80&w=2680&auto=format&fit=crop" 
                 alt="Tailor working"
-                className="w-full h-full object-cover scale-110 hover:scale-100 transition-transform duration-[2s]"
+                className={`w-full h-full object-cover scale-110 hover:scale-100 transition-all duration-[2s] ${heroImageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 referrerPolicy="no-referrer"
+                onLoad={() => setHeroImageLoaded(true)}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent"></div>
             </div>
@@ -121,7 +139,7 @@ export default function Home() {
       </section>
 
       {/* Benefits */}
-      <section className="py-24 bg-slate-50 border-y border-slate-100">
+      <section id="services" className="scroll-mt-24 py-24 bg-slate-50 border-y border-slate-100">
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-3 gap-8 text-center">
           <div className="p-8 space-y-4">
             <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-indigo-600 mx-auto">
@@ -148,7 +166,7 @@ export default function Home() {
       </section>
 
       {/* Order Tracking Portal */}
-      <section id="tracking" className="py-24 sm:py-48 px-4 sm:px-8 bg-slate-950 text-white relative overflow-hidden">
+      <section id="tracking" className="scroll-mt-24 py-24 sm:py-48 px-4 sm:px-8 bg-slate-950 text-white relative overflow-hidden">
         <div className="max-w-4xl mx-auto text-center space-y-16 sm:space-y-24 relative z-10">
           <div className="space-y-6 sm:space-y-8">
             <div className="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-indigo-600/10 border border-indigo-500/20">
@@ -234,10 +252,10 @@ export default function Home() {
                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-2">
                     {[
                       { key: 'pending', label: 'Registered', color: 'bg-indigo-600 shadow-lg shadow-indigo-200' },
-                      { key: 'cutting', label: 'Precision Cutting', color: orderStatus.taskStatus.cutting === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'stitching', label: 'Structural Stitching', color: orderStatus.taskStatus.stitching === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'finishing', label: 'Final Articulation', color: orderStatus.taskStatus.finishing === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'finished', label: 'Ready for Fitting', color: orderStatus.status === 'finished' || orderStatus.status === 'delivered' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' }
+                      { key: 'cutting', label: 'Precision Cutting', color: orderStatus.taskStatus?.cutting === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
+                      { key: 'stitching', label: 'Structural Stitching', color: orderStatus.taskStatus?.stitching === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
+                      { key: 'finishing', label: 'Final Articulation', color: orderStatus.taskStatus?.finishing === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
+                      { key: 'ready', label: 'Ready for Fitting', color: orderStatus.status === 'ready' || orderStatus.status === 'delivered' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' }
                     ].map((step, i) => (
                       <div key={i} className="flex-1 space-y-3">
                         <div className={`h-3 rounded-full ${step.color} transition-all duration-1000`}></div>
@@ -254,14 +272,11 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-950 text-white py-20">
+      <footer id="contact" className="scroll-mt-24 bg-slate-950 text-white py-20">
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-12">
           <div className="space-y-6">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-                <Scissors size={18} />
-              </div>
-              <span className="text-xl font-black tracking-tight">STITCH<span className="text-indigo-600">MASTER</span></span>
+              <BrandLogo dark markClassName="h-9 w-9 rounded-xl" textClassName="text-xl" />
             </div>
             <p className="text-slate-400 text-sm leading-relaxed">
               Leading the digital revolution in the tailoring industry. Precision, style, and care in every stitch.
