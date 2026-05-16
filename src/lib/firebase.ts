@@ -2,12 +2,30 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { enableOfflinePersistence } from './offlinePersistence';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth();
 
-// Test connection
+void enableOfflinePersistence(db).then(result => {
+  if (result.enabled === true) {
+    console.info('Firestore offline persistence enabled.');
+    return;
+  }
+
+  const disabledResult = result;
+
+  if (disabledResult.reason === 'multiple-tabs') {
+    console.info('Firestore offline persistence is owned by another open tab.');
+    return;
+  }
+
+  if (disabledResult.reason === 'unsupported-browser') {
+    console.info('Firestore offline persistence is not supported in this browser.');
+  }
+});
+
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, '_connection_test_', 'init'));

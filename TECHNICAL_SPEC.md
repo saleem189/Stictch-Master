@@ -19,6 +19,7 @@ Tailoring ERP is a Vite React application backed by Firebase Auth and Cloud Fire
 
 - Firebase Authentication with Google provider
 - Cloud Firestore for operational data
+- Firestore multi-tab IndexedDB persistence for browser offline cache support
 - Firestore Security Rules in `firestore.rules`
 - Collection shape documented in `firebase-blueprint.json`
 
@@ -72,7 +73,7 @@ The client dashboard reads:
 - `orders` where `clientId == auth.uid`
 - `quoteRequests` where `clientId == auth.uid`
 
-It shows order status, quote request status, payment summary, and a measurements placeholder.
+It uses realtime Firestore listeners, shows order status, quote request status, payment summary, cache/sync indicators, and a measurements placeholder.
 
 ### 3.4 Admin/Employee Dashboard
 
@@ -92,7 +93,13 @@ Admins additionally access:
 - employees
 - branches
 
-### 3.5 Order Lifecycle
+### 3.5 Notifications and Offline State
+
+Notifications are normalized through `src/lib/notifications.ts` before they are written or displayed. The notification bell listens live to the signed-in user's notification stream, displays listener errors, marks individual notifications as read, and supports clearing unread notifications in a batch.
+
+Firestore persistence is initialized from `src/lib/firebase.ts` through `src/lib/offlinePersistence.ts`. The app reports offline cache and pending-write states in realtime-enabled surfaces. Full PWA app-shell caching and background delivery are still future work.
+
+### 3.6 Order Lifecycle
 
 Global order status:
 
@@ -120,7 +127,7 @@ Item workflow status supports a more granular bespoke production pipeline:
 
 Orders include an embedded `auditTrail` array and optional `taskStatus` sync state.
 
-### 3.6 Accounting
+### 3.7 Accounting
 
 Financial records use double-entry fields:
 
@@ -146,7 +153,13 @@ Pure helper modules:
 - `src/lib/roleRouting.ts`
 - `src/lib/quoteRequests.ts`
 - `src/lib/orderFinance.ts`
+- `src/lib/notifications.ts`
+- `src/lib/offlinePersistence.ts`
 - `src/lib/validation.ts`
+
+Realtime hooks:
+
+- `src/hooks/useFirestoreQuery.ts`
 
 ## 5. Firestore Security Model
 
@@ -156,6 +169,7 @@ Rules are role-based:
 - Admin and employee permissions derive from `/users/{uid}.role`.
 - Clients can create and read their own quote requests.
 - Employees/admins can read quote requests and update review status.
+- Notifications must match the normalized schema and can only be created for the signed-in user unless the creator is an admin.
 - Admin-only collections remain restricted by `isAdmin()`.
 
 ## 6. Testing and Verification
@@ -166,6 +180,8 @@ Current unit coverage includes:
 - order finance helpers
 - role routing helpers
 - quote request helpers
+- notification normalization helpers
+- offline persistence setup helpers
 
 Primary commands:
 
@@ -183,5 +199,6 @@ The build currently emits a known chunk-size warning because the admin surface i
 - Payment and payroll flows should be converted to `writeBatch` or `runTransaction`.
 - Quote-to-order conversion is not yet implemented.
 - Admin quote review UI is not yet implemented.
+- PWA app-shell caching and push/email/SMS delivery are not yet implemented.
 - Route-level lazy loading should be added to reduce bundle size.
 - Firestore emulator tests should cover the security denial cases in `security_spec.md`.

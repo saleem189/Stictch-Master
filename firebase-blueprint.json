@@ -273,8 +273,11 @@
         "message": { "type": "string" },
         "type": { "type": "string", "enum": ["info", "warning", "success", "error"] },
         "read": { "type": "boolean" },
+        "channel": { "type": "string", "enum": ["internal", "whatsapp", "sms", "email"] },
+        "status": { "type": "string", "enum": ["pending", "sent", "failed"] },
         "createdAt": { "type": "string", "format": "date-time" }
-      }
+      },
+      "required": ["userId", "title", "message", "type", "read", "channel", "status", "createdAt"]
     },
     "RecurringTransaction": {
       "title": "Recurring Transaction",

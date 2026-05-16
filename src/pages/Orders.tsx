@@ -1,38 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ShoppingBag, Plus, Filter, MoreVertical, Printer, DollarSign, Bell, MessageCircle } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import NewOrderForm from '../components/NewOrderForm';
 import PaymentModal from '../components/PaymentModal';
-import { addDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order } from '../types';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import OrderDetailsModal from '../components/OrderDetailsModal';
+import { createNotification } from '../lib/notifications';
+import { useFirestoreQuery } from '../hooks/useFirestoreQuery';
 
 export default function Orders() {
   const { t } = useTranslation();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<Order | null>(null);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  async function fetchOrders() {
-    try {
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
-      setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
-    } catch (e) {
-      handleFirestoreError(e, OperationType.GET, 'orders');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const ordersQuery = useMemo(() => query(collection(db, 'orders'), orderBy('createdAt', 'desc')), []);
+  const mapOrder = useCallback((id: string, data: Record<string, unknown>) => ({ id, ...data } as Order), []);
+  const { data: orders, loading, error, fromCache, hasPendingWrites } = useFirestoreQuery<Order>(ordersQuery, mapOrder);
 
   const sendWhatsApp = (order: Order) => {
     const phone = order.clientPhone?.replace(/\D/g, '');
@@ -149,13 +137,11 @@ export default function Orders() {
 
   const sendReminder = async (order: Order) => {
     try {
-      await addDoc(collection(db, 'notifications'), {
+      await createNotification(db, {
         userId: order.clientId,
         title: 'Payment Reminder',
         message: `Your tailoring order #${order.id.slice(0, 8)} for ${order.clientName} requires a pending payment of Rs. ${(order.totalAmount - order.paidAmount).toLocaleString()}.`,
         type: 'warning',
-        read: false,
-        createdAt: new Date().toISOString()
       });
       toast.success(`Reminder sent to ${order.clientName}`, {
         icon: '📤',
@@ -171,7 +157,11 @@ export default function Orders() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight italic uppercase">{t('Orders')}</h1>
-          <p className="text-sm text-slate-500 font-medium">Manage production pipeline and billing.</p>
+          <p className="text-sm text-slate-500 font-medium">
+            Manage production pipeline and billing.
+            {fromCache && <span className="ml-2 text-amber-600 font-black uppercase text-[10px]">Offline cache</span>}
+            {hasPendingWrites && <span className="ml-2 text-indigo-600 font-black uppercase text-[10px]">Syncing</span>}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
            <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all">
@@ -206,7 +196,7 @@ export default function Orders() {
                     <div className="flex items-center gap-3">
                        <span className={`w-2.5 h-2.5 rounded-full ring-4 ring-slate-50 ${
                          order.status === 'delivered' ? 'bg-green-500' :
-                         order.status === 'stitching' ? 'bg-indigo-500' :
+                         order.status === 'in-progress' ? 'bg-indigo-500' :
                          'bg-slate-300'
                        }`} />
                        <div>
@@ -291,6 +281,11 @@ export default function Orders() {
               ))}
             </tbody>
           </table>
+          {error && (
+            <div className="px-6 py-4 text-sm font-bold text-red-600">
+              Orders could not load in realtime. Please check your connection and permissions.
+            </div>
+          )}
           {orders.length === 0 && !loading && (
             <div className="flex flex-col items-center justify-center py-24 text-slate-400">
                <ShoppingBag size={48} strokeWidth={1.5} className="mb-4 opacity-20" />
@@ -305,21 +300,21 @@ export default function Orders() {
         {isNewOrderOpen && (
           <NewOrderForm 
             onClose={() => setIsNewOrderOpen(false)} 
-            onSuccess={() => { setIsNewOrderOpen(false); fetchOrders(); }} 
+            onSuccess={() => { setIsNewOrderOpen(false); }}
           />
         )}
         {selectedOrderForPayment && (
           <PaymentModal 
             order={selectedOrderForPayment}
             onClose={() => setSelectedOrderForPayment(null)}
-            onSuccess={() => { setSelectedOrderForPayment(null); fetchOrders(); }}
+            onSuccess={() => { setSelectedOrderForPayment(null); }}
           />
         )}
         {selectedOrderDetails && (
           <OrderDetailsModal 
             order={selectedOrderDetails}
             onClose={() => setSelectedOrderDetails(null)}
-            onSuccess={() => { setSelectedOrderDetails(null); fetchOrders(); }}
+            onSuccess={() => { setSelectedOrderDetails(null); }}
           />
         )}
       </AnimatePresence>

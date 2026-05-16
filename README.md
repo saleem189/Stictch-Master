@@ -10,6 +10,8 @@ A bilingual tailoring business platform for client-facing quote requests and rol
 - **Client portal:** Authenticated clients land on `/client`, can view their orders and quote requests, and can request a bespoke quote.
 - **Admin/employee ERP:** Staff land on `/admin` and use operational dashboards for orders, clients, appointments, inventory, accounting, payroll, vendors, and branches.
 - **Bespoke inquiry flow:** `/client/request-quote` creates a `quoteRequests` Firestore document. It does not immediately create orders, payments, or ledger entries.
+- **Realtime foundation:** Orders and the client portal use Firestore listeners with cache/sync indicators. Notifications listen live and can be cleared from the bell menu.
+- **Offline foundation:** Firestore multi-tab IndexedDB persistence is enabled during Firebase startup when the browser supports it.
 - **Bilingual foundation:** English/Urdu strings live in `src/lib/i18n.ts`; Urdu uses RTL document direction.
 
 ## Tech Stack
@@ -28,6 +30,8 @@ A bilingual tailoring business platform for client-facing quote requests and rol
 - `/admin/*` admin and employee ERP dashboard
 
 Role routing is centralized in `src/lib/roleRouting.ts`.
+
+Realtime and robustness helpers are centralized in `src/hooks/useFirestoreQuery.ts`, `src/lib/notifications.ts`, and `src/lib/offlinePersistence.ts`.
 
 ## Firestore Collections
 

@@ -13,12 +13,16 @@ The application now includes a role-aware client portal and Tailoring ERP brand 
 - Quote inquiries are stored in `quoteRequests` and are documented in `firebase-blueprint.json`.
 - Firestore rules include client-owned quote request boundaries.
 - The downloaded logo asset lives at `src/assets/stitchmaster-logo.png` and is rendered through `src/components/BrandLogo.tsx`.
+- Firestore offline persistence is initialized through `src/lib/offlinePersistence.ts`.
+- Realtime Firestore reads are centralized in `src/hooks/useFirestoreQuery.ts` and are now used by the orders surface and client dashboard.
+- Notifications are normalized through `src/lib/notifications.ts`; the bell now handles listener errors and clear-all read updates.
 
 Remaining product gaps:
 
 - Staff quote review and quote-to-order conversion are not implemented yet.
 - Public order tracking still needs sanitized tracking documents or authenticated client-only tracking.
 - Financial multi-document writes still need transaction/batch hardening.
+- Full PWA app-shell caching and external push/email/SMS delivery are not implemented yet.
 - The production bundle still needs route-level code splitting.
 
 ## Executive Summary

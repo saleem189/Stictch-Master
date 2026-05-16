@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, FileText, Ruler, ShoppingBag } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { useUser } from '../contexts/UserContext';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { Order, QuoteRequest } from '../types';
 import { useTranslation } from 'react-i18next';
 import BrandLogo from '../components/BrandLogo';
+import { useFirestoreQuery } from '../hooks/useFirestoreQuery';
 
 const statusClassNames: Record<string, string> = {
   pending: 'bg-slate-100 text-slate-600 border-slate-200',
@@ -22,35 +23,30 @@ const statusClassNames: Record<string, string> = {
 export default function ClientDashboard() {
   const { t } = useTranslation();
   const { user, profile } = useUser();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchClientData() {
-      if (!user) return;
-
-      try {
-        const [ordersSnap, quoteSnap] = await Promise.all([
-          getDocs(query(collection(db, 'orders'), where('clientId', '==', user.uid))),
-          getDocs(query(collection(db, 'quoteRequests'), where('clientId', '==', user.uid))),
-        ]);
-
-        setOrders(ordersSnap.docs
-          .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Order))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-        setQuoteRequests(quoteSnap.docs
-          .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as QuoteRequest))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'client-dashboard');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchClientData();
-  }, [user]);
+  const ordersQuery = useMemo(
+    () => user ? query(collection(db, 'orders'), where('clientId', '==', user.uid)) : null,
+    [user]
+  );
+  const quoteRequestsQuery = useMemo(
+    () => user ? query(collection(db, 'quoteRequests'), where('clientId', '==', user.uid)) : null,
+    [user]
+  );
+  const mapOrder = useCallback((id: string, data: Record<string, unknown>) => ({ id, ...data } as Order), []);
+  const mapQuoteRequest = useCallback((id: string, data: Record<string, unknown>) => ({ id, ...data } as QuoteRequest), []);
+  const ordersState = useFirestoreQuery<Order>(ordersQuery, mapOrder);
+  const quoteRequestsState = useFirestoreQuery<QuoteRequest>(quoteRequestsQuery, mapQuoteRequest);
+  const orders = useMemo(
+    () => [...ordersState.data].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [ordersState.data]
+  );
+  const quoteRequests = useMemo(
+    () => [...quoteRequestsState.data].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [quoteRequestsState.data]
+  );
+  const loading = ordersState.loading || quoteRequestsState.loading;
+  const dataError = ordersState.error || quoteRequestsState.error;
+  const fromCache = ordersState.fromCache || quoteRequestsState.fromCache;
+  const hasPendingWrites = ordersState.hasPendingWrites || quoteRequestsState.hasPendingWrites;
 
   return (
     <main className="min-h-[100dvh] bg-slate-50 text-slate-900">
@@ -72,6 +68,8 @@ export default function ClientDashboard() {
             </h1>
             <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
               Track your bespoke work, manage quote requests, and keep measurements ready for your next garment.
+              {fromCache && <span className="ml-2 font-black uppercase text-amber-600">Offline cache</span>}
+              {hasPendingWrites && <span className="ml-2 font-black uppercase text-indigo-600">Syncing</span>}
             </p>
           </div>
 
@@ -90,6 +88,10 @@ export default function ClientDashboard() {
         {loading ? (
           <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 text-sm font-bold text-slate-400 shadow-sm">
             Syncing your tailoring account...
+          </div>
+        ) : dataError ? (
+          <div className="rounded-[2.5rem] border border-red-100 bg-red-50 p-8 text-sm font-bold text-red-600 shadow-sm">
+            Your client portal could not load live data. Please check your connection and sign-in permissions.
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">

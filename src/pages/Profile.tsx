@@ -7,6 +7,7 @@ import { User, Phone, Mail, Save, Clock, CheckCircle, XCircle, Bell, MessageSqua
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import { createNotification } from '../lib/notifications';
 
 export default function Profile() {
   const { user, profile, isAdmin, isEmployee } = useUser();
@@ -114,15 +115,13 @@ export default function Profile() {
       }
 
       // 3. Create Notification for the employee
-      await addDoc(collection(db, 'notifications'), {
+      await createNotification(db, {
         userId: request.userId,
         title: `Profile Request ${status.charAt(0).toUpperCase() + status.slice(1)}`,
         message: status === 'approved' 
           ? 'Your profile change request has been approved and reflect in 48 hours.' 
           : 'Your profile change request has been rejected.',
         type: status === 'approved' ? 'success' : 'error',
-        read: false,
-        createdAt: new Date().toISOString()
       });
 
       toast.success(`Request ${status} successfully`);

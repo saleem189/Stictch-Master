@@ -6,6 +6,7 @@ import { X, Plus, Trash2, Save, User, UserCheck, Calendar, Scissors, MapPin } fr
 import { motion } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { calculateOrderTotal } from '../lib/orderFinance';
+import { createNotification } from '../lib/notifications';
 
 interface Props {
   onClose: () => void;
@@ -128,13 +129,11 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
       // System Notification for Admin
       // In a real multi-user app, you'd find admins via query. 
       // For this prototype, we'll notify the current user too if they are the admin.
-      await addDoc(collection(db, 'notifications'), {
+      await createNotification(db, {
         userId: auth.currentUser?.uid,
         title: 'New Order Received',
         message: `Order #${orderId.slice(0, 8)} for ${orderData.clientName} has been created.`,
         type: 'success',
-        read: false,
-        createdAt: new Date().toISOString()
       });
 
       onSuccess();

@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
-import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { Notification } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'react-hot-toast';
+import { normalizeNotification } from '../lib/notifications';
 
 export default function NotificationBell() {
   const { user } = useUser();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
@@ -22,9 +25,16 @@ export default function NotificationBell() {
       limit(10)
     );
 
-    return onSnapshot(q, (snap) => {
-      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)));
-    });
+    return onSnapshot(
+      q,
+      (snap) => {
+        setError(null);
+        setNotifications(snap.docs.map(d => normalizeNotification(d.id, d.data())));
+      },
+      () => {
+        setError('Notifications are unavailable right now.');
+      }
+    );
   }, [user]);
 
   const markAsRead = async (id: string) => {
@@ -32,6 +42,24 @@ export default function NotificationBell() {
       await updateDoc(doc(db, 'notifications', id), { read: true });
     } catch (e) {
       console.error(e);
+      toast.error('Could not update notification.');
+    }
+  };
+
+  const clearAll = async () => {
+    try {
+      const batch = writeBatch(db);
+      notifications
+        .filter(notification => !notification.read)
+        .forEach(notification => {
+          batch.update(doc(db, 'notifications', notification.id), { read: true });
+        });
+
+      await batch.commit();
+      toast.success('Notifications cleared.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not clear notifications.');
     }
   };
 
@@ -72,7 +100,12 @@ export default function NotificationBell() {
                 <span className="text-sm font-bold uppercase tracking-widest">Notifications</span>
               </div>
               <div className="max-h-96 overflow-y-auto">
-                {notifications.length === 0 ? (
+                {error ? (
+                  <div className="p-8 text-center text-red-500">
+                    <AlertCircle size={22} className="mx-auto mb-3" />
+                    <p className="text-sm font-bold">{error}</p>
+                  </div>
+                ) : notifications.length === 0 ? (
                   <div className="p-8 text-center text-slate-400">
                     <p className="text-sm">No notifications yet.</p>
                   </div>
@@ -98,7 +131,7 @@ export default function NotificationBell() {
               </div>
               {notifications.length > 0 && (
                 <div className="p-3 bg-slate-50 border-t border-slate-100 text-center">
-                   <button className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:underline">Clear all</button>
+                   <button onClick={clearAll} className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:underline">Clear all</button>
                 </div>
               )}
             </motion.div>
