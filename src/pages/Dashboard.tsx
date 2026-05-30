@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, limit, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, limit, orderBy, where, getCountFromServer } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order, InventoryItem, Transaction } from '../types';
 import { 
@@ -25,6 +25,11 @@ import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { seedDatabase } from '../lib/seeder';
 import { PageHeader, PageShell } from '../components/layout/AppLayout';
+import {
+  buildDashboardMetrics,
+  getActiveOrderStatuses,
+  getDashboardTransactionStartDate,
+} from '../lib/dashboardMetrics';
 
 const QuickAction = ({ icon: Icon, label, color, onClick }: { icon: React.ElementType, label: string, color: string, onClick: () => void }) => (
   <button 
@@ -100,106 +105,38 @@ export default function Dashboard() {
           });
         }
 
-        const [ordersSnap, clientsSnap, inventorySnap, txnSnap] = await Promise.all([
-          getDocs(collection(db, 'orders')),
-          getDocs(collection(db, 'clients')),
-          getDocs(collection(db, 'inventory')),
-          getDocs(query(collection(db, 'transactions'), orderBy('date', 'desc')))
-        ]);
-        
-        const orders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
-        const transactions = txnSnap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
-        const active = orders.filter(d => d.status !== 'delivered' && d.status !== 'cancelled').length;
-        const lowItems = inventorySnap.docs
-          .map(d => ({ id: d.id, ...d.data() } as InventoryItem))
-          .filter(d => d.quantity <= d.minLevel);
-        
-        const now = new Date();
-        const currentMonth = now.toISOString().slice(0, 7);
-        
-        let revenue = 0;
-        let payroll = 0;
-        let totalReceivables = 0;
-        const monthlyRev: Record<string, number> = {};
-
-        transactions.forEach(txn => {
-           if (!txn.date) return;
-           
-           const txnDateStr = String(txn.date);
-           const txnMonth = txnDateStr.slice(0, 7);
-           
-           if (txnMonth === currentMonth) {
-              if (txn.type === 'sale') revenue += txn.amount;
-              if (txn.type === 'payroll') payroll += txn.amount;
-           }
-           
-           try {
-             const dateObj = new Date(txnDateStr);
-             if (!isNaN(dateObj.getTime())) {
-               const monthName = dateObj.toLocaleString('en-US', { month: 'short' });
-               if (txn.type === 'sale') {
-                  monthlyRev[monthName] = (monthlyRev[monthName] || 0) + txn.amount;
-               }
-             }
-           } catch {
-             console.warn('Invalid transaction date:', txn.date);
-           }
-        });
-
-        orders.forEach(o => {
-          if (o.status !== 'delivered' && o.status !== 'cancelled') {
-             totalReceivables += (o.totalAmount - (o.paidAmount || 0));
-          }
-        });
-
-        const revEntries = Object.entries(monthlyRev).map(([name, r]) => ({ name, revenue: r }));
-        const sortedRevEntries = revEntries.slice(-6).sort((a, b) => {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          return months.indexOf(a.name) - months.indexOf(b.name);
-        });
-        setRevenueData(sortedRevEntries);
-
-        setStats({
-          activeOrders: active,
-          totalClients: clientsSnap.size,
-          lowStock: lowItems.length,
-          monthlyRevenue: revenue,
-          monthlyPayroll: payroll,
-          deliveredThisMonth: orders.filter(o => o.status === 'delivered').length,
-          receivables: totalReceivables
-        });
-
-        // Advanced Analytics: Workflow Distribution (Item-based)
-        const itemStages: Record<string, number> = {};
-
-        orders.forEach(o => {
-          (o.items || []).forEach(item => {
-            const s = item.status || 'pending';
-            itemStages[s] = (itemStages[s] || 0) + 1;
-          });
-        });
-
-        const statusColors: Record<string, string> = {
-          'measurement': '#f1f5f9',
-          'fabric-reservation': '#f1f5f9',
-          'pattern-making': '#e2e8f0',
-          'cutting': '#cbd5e1',
-          'stitching': '#94a3b8',
-          'trial': '#64748b',
-          'ready': '#4f46e5',
-          'delivered': '#10b981'
-        };
-
-        const chartEntries = Object.entries(itemStages).map(([name, count]) => ({
-          name: name.replace('-', ' '),
-          count,
-          color: statusColors[name] || '#94a3b8'
-        })).sort((a, b) => b.count - a.count).slice(0, 5);
-        
-        setChartData(chartEntries);
-
+        const activeOrdersQuery = query(collection(db, 'orders'), where('status', 'in', getActiveOrderStatuses()));
+        const transactionStartDate = getDashboardTransactionStartDate();
+        const transactionsQuery = query(
+          collection(db, 'transactions'),
+          where('date', '>=', transactionStartDate),
+          orderBy('date', 'desc'),
+          limit(500)
+        );
         const recentQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(10));
-        const recentSnap = await getDocs(recentQuery);
+
+        const [ordersSnap, clientsCountSnap, inventorySnap, txnSnap, recentSnap] = await Promise.all([
+          getDocs(activeOrdersQuery),
+          getCountFromServer(collection(db, 'clients')),
+          getDocs(collection(db, 'inventory')),
+          getDocs(transactionsQuery),
+          getDocs(recentQuery)
+        ]);
+
+        const activeOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+        const inventory = inventorySnap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryItem));
+        const transactions = txnSnap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+
+        const metrics = buildDashboardMetrics({
+          activeOrders,
+          clientCount: clientsCountSnap.data().count,
+          inventory,
+          transactions,
+        });
+
+        setRevenueData(metrics.revenueData);
+        setStats(metrics.stats);
+        setChartData(metrics.chartData);
         setRecentOrders(recentSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
       } catch {
         console.error('Dashboard fetch error');
