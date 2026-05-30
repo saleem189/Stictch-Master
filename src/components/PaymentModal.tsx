@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { addDoc, collection, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, doc, getDocs, increment, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Order } from '../types';
+import { Account, Order } from '../types';
 import { X, DollarSign, CreditCard } from 'lucide-react';
 import { motion } from 'motion/react';
 import { calculateRemainingBalance, getStatusAfterPayment } from '../lib/orderFinance';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
 
 interface Props {
   order: Order;
@@ -23,14 +24,18 @@ export default function PaymentModal({ order, onClose, onSuccess }: Props) {
     
     setSubmitting(true);
     try {
-      // 1. Update Order paidAmount
-      await updateDoc(doc(db, 'orders', order.id), {
+      const accountsSnap = await getDocs(collection(db, 'accounts'));
+      const accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
+      const cashAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
+      const receivableAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.receivable], ['receivable'], 'Accounts Receivable');
+      const batch = writeBatch(db);
+
+      batch.update(doc(db, 'orders', order.id), {
         paidAmount: increment(amount),
         status: getStatusAfterPayment(order, amount)
       });
 
-      // 2. Create Payment Record
-      await addDoc(collection(db, 'payments'), {
+      batch.set(doc(collection(db, 'payments')), {
         date: new Date().toISOString(),
         amount: amount,
         method: method,
@@ -40,17 +45,32 @@ export default function PaymentModal({ order, onClose, onSuccess }: Props) {
         createdAt: new Date().toISOString()
       });
 
-      // 3. Create Accounting Transaction
-      await addDoc(collection(db, 'transactions'), {
+      const receiptRef = doc(collection(db, 'financialDocuments'));
+      batch.set(receiptRef, {
+        type: 'receipt',
+        clientId: order.clientId,
+        clientName: order.clientName,
+        orderId: order.id,
+        amount,
+        date: new Date().toISOString().split('T')[0],
+        status: 'paid',
+        notes: `Payment for Order #${order.id.slice(0, 8)} via ${method}`,
+        createdAt: new Date().toISOString(),
+        createdBy: 'System',
+        auditTrail: ['Receipt generated from payment modal']
+      });
+
+      appendLedgerEntryToBatch(db, batch, accounts, {
         date: new Date().toISOString(),
         description: `Payment Received: Order #${order.id.slice(0, 8)} - ${order.clientName}`,
         amount: amount,
-        debitAccountId: 'cash_at_hand', // assume ID
-        creditAccountId: 'accounts_receivable', // assume ID
-        reference: order.id,
-        createdAt: new Date().toISOString()
+        debitAccountId: cashAcc.id,
+        creditAccountId: receivableAcc.id,
+        reference: receiptRef.id,
+        type: 'sale'
       });
 
+      await batch.commit();
       onSuccess();
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'payments');

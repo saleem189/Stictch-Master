@@ -1,198 +1,104 @@
-import { collection, addDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
-import { 
-  Branch, 
-  Employee, 
-  Client, 
-  InventoryItem, 
-  Account, 
-  Order,
-  Measurements
-} from '../types';
+import { buildSeedData, SeedData } from './seedData';
 
-const SEED_BRANCHES: Partial<Branch>[] = [
-  { name: 'Imperial Headquarters', location: 'Gulberg III, Lahore', phone: '+92 42 3571XXXX' }
+type SeedCollectionName =
+  | 'users'
+  | 'branches'
+  | 'employees'
+  | 'clients'
+  | 'inventory'
+  | 'vendors'
+  | 'vendorBills'
+  | 'accounts'
+  | 'orders'
+  | 'tasks'
+  | 'appointments'
+  | 'quoteRequests'
+  | 'transactions'
+  | 'financialDocuments'
+  | 'recurringTransactions'
+  | 'notifications';
+
+interface SeedRecord {
+  id: string;
+}
+
+const COLLECTIONS: { name: SeedCollectionName; records: (seed: SeedData) => SeedRecord[] }[] = [
+  { name: 'users', records: seed => seed.users.map(user => ({ id: user.uid, ...user })) },
+  { name: 'branches', records: seed => seed.branches as SeedRecord[] },
+  { name: 'employees', records: seed => seed.employees as SeedRecord[] },
+  { name: 'clients', records: seed => seed.clients as SeedRecord[] },
+  { name: 'inventory', records: seed => seed.inventory as SeedRecord[] },
+  { name: 'vendors', records: seed => seed.vendors as SeedRecord[] },
+  { name: 'vendorBills', records: seed => seed.vendorBills as SeedRecord[] },
+  { name: 'accounts', records: seed => seed.accounts as SeedRecord[] },
+  { name: 'orders', records: seed => seed.orders as SeedRecord[] },
+  { name: 'tasks', records: seed => seed.tasks as SeedRecord[] },
+  { name: 'appointments', records: seed => seed.appointments as SeedRecord[] },
+  { name: 'quoteRequests', records: seed => seed.quoteRequests as SeedRecord[] },
+  { name: 'transactions', records: seed => seed.transactions as SeedRecord[] },
+  { name: 'financialDocuments', records: seed => seed.financialDocuments as SeedRecord[] },
+  { name: 'recurringTransactions', records: seed => seed.recurringTransactions as SeedRecord[] },
+  { name: 'notifications', records: seed => seed.notifications as SeedRecord[] },
 ];
 
-const SEED_ACCOUNTS: Partial<Account>[] = [
-  { code: '1001', name: 'Petty Cash', type: 'asset', balance: 50000 },
-  { code: '1002', name: 'Bank - Al-Falah', type: 'asset', balance: 250000 },
-  { code: '4001', name: 'Sales Revenue', type: 'revenue', balance: 0 },
-  { code: '5001', name: 'Payroll Expense', type: 'expense', balance: 0 },
-  { code: '5002', name: 'Utility Expense', type: 'expense', balance: 0 },
-  { code: '1003', name: 'Fabric Inventory', type: 'asset', balance: 120000 }
-];
+function stripId(record: SeedRecord) {
+  const data = { ...record } as Record<string, unknown>;
+  delete data.id;
+  return data;
+}
 
-const SEED_EMPLOYEES: Partial<Employee>[] = [
-  { name: 'Master Saleem', role: 'Head Cutter', salary: 85000, phone: '03001234567', joinedAt: new Date().toISOString() },
-  { name: 'Zahid Tailor', role: 'Stitcher', salary: 45000, phone: '03007654321', joinedAt: new Date().toISOString() },
-  { name: 'Irfan Helper', role: 'Finishing Specialist', salary: 30000, phone: '03001112223', joinedAt: new Date().toISOString() }
-];
+export async function seedDatabase(nowIso = new Date().toISOString()) {
+  const seed = buildSeedData(nowIso);
+  let writeCount = 0;
 
-const SEED_CLIENTS: Partial<Client>[] = [
-  { 
-    name: 'Mian Saleem Ayoub', 
-    phone: '0321844XXXX', 
-    email: 'saleem@example.com', 
-    address: 'Defense Phase 5', 
-    measurements: { neck: 15.5, chest: 42, waist: 36, shoulder: 18, sleeve: 24, length: 40 },
-    createdAt: new Date().toISOString()
-  },
-  { 
-    name: 'Chaudhry Pervaiz', 
-    phone: '0301445XXXX', 
-    address: 'Cavalry Ground', 
-    measurements: { neck: 16, chest: 44, waist: 40, shoulder: 19, sleeve: 25, length: 42 },
-    createdAt: new Date().toISOString()
-  }
-];
-
-const SEED_INVENTORY: Partial<InventoryItem>[] = [
-  { name: 'Wash & Wear - Cream', category: 'Fabric', quantity: 45, unit: 'meters', minLevel: 10, pricePerUnit: 850, isRollTracked: true, lastUpdated: new Date().toISOString() },
-  { name: 'Latha - White', category: 'Fabric', quantity: 120, unit: 'meters', minLevel: 20, pricePerUnit: 650, isRollTracked: true, lastUpdated: new Date().toISOString() },
-  { name: 'German Interlining', category: 'Notions', quantity: 5, unit: 'pieces', minLevel: 10, pricePerUnit: 450, isRollTracked: false, lastUpdated: new Date().toISOString() }
-];
-
-export async function seedDatabase() {
-  console.log('Starting seed process...');
-  
   try {
-    const branchesRef = collection(db, 'branches');
-    const branchIds: string[] = [];
-    for (const b of SEED_BRANCHES) {
-      const docRef = await addDoc(branchesRef, b);
-      branchIds.push(docRef.id);
-    }
+    let batch = writeBatch(db);
+    let batchCount = 0;
 
-    const accountsRef = collection(db, 'accounts');
-    const accountMap: Record<string, string> = {};
-    for (const a of SEED_ACCOUNTS) {
-      const docRef = await addDoc(accountsRef, a);
-      accountMap[a.name!] = docRef.id;
-    }
+    for (const collectionSpec of COLLECTIONS) {
+      for (const record of collectionSpec.records(seed)) {
+        batch.set(doc(db, collectionSpec.name, record.id), {
+          ...stripId(record),
+          seededAt: serverTimestamp(),
+        }, { merge: true });
 
-    const empRef = collection(db, 'employees');
-    const empIds: string[] = [];
-    for (const e of SEED_EMPLOYEES) {
-      const docRef = await addDoc(empRef, e);
-      empIds.push(docRef.id);
-    }
+        writeCount += 1;
+        batchCount += 1;
 
-    const clientsRef = collection(db, 'clients');
-    const clientIds: string[] = [];
-    for (const c of SEED_CLIENTS) {
-      const docRef = await addDoc(clientsRef, c);
-      clientIds.push(docRef.id);
-    }
-
-    const invRef = collection(db, 'inventory');
-    for (const i of SEED_INVENTORY) {
-      await addDoc(invRef, i);
-    }
-
-    // Seed some orders
-    const ordersRef = collection(db, 'orders');
-    const txnRef = collection(db, 'transactions');
-    const docRefFin = collection(db, 'financialDocuments');
-    
-    const now = new Date();
-    const lastMonth = new Date();
-    lastMonth.setMonth(now.getMonth() - 1);
-
-    const sampleOrders: Partial<Order>[] = [
-      {
-        clientId: clientIds[0],
-        clientName: SEED_CLIENTS[0].name,
-        branchId: branchIds[0],
-        status: 'in-progress',
-        totalAmount: 12500,
-        paidAmount: 5000,
-        advancePayment: 5000,
-        dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        createdAt: now.toISOString(),
-        updatedAt: now.toISOString(),
-        items: [
-          { id: 'item1', type: 'Shalwar Kameez', description: 'Cream Wash & Wear', price: 12500, status: 'stitching', dueDate: now.toISOString(), measurements: SEED_CLIENTS[0].measurements as Measurements }
-        ],
-        auditTrail: []
-      },
-      {
-        clientId: clientIds[1],
-        clientName: SEED_CLIENTS[1].name,
-        branchId: branchIds[0],
-        status: 'ready',
-        totalAmount: 25000,
-        paidAmount: 25000,
-        advancePayment: 10000,
-        dueDate: now.toISOString(),
-        createdAt: lastMonth.toISOString(),
-        updatedAt: now.toISOString(),
-        items: [
-          { id: 'item2', type: 'Sherwani', description: 'Black Heavy Embroidered', price: 25000, status: 'ready', dueDate: now.toISOString(), measurements: SEED_CLIENTS[1].measurements as Measurements }
-        ],
-        auditTrail: []
-      }
-    ];
-
-    for (const o of sampleOrders) {
-      const orderDoc = await addDoc(ordersRef, o);
-      
-      // Add transactions for these orders
-      if (o.paidAmount! > 0) {
-        await addDoc(txnRef, {
-          date: o.createdAt,
-          description: `Advance for Order ${orderDoc.id}`,
-          amount: o.paidAmount,
-          debitAccountId: accountMap['Petty Cash'],
-          creditAccountId: accountMap['Sales Revenue'],
-          type: 'sale',
-          reference: orderDoc.id
-        });
-
-        await addDoc(docRefFin, {
-          type: 'receipt',
-          clientId: o.clientId,
-          clientName: o.clientName,
-          orderId: orderDoc.id,
-          amount: o.paidAmount,
-          date: o.createdAt,
-          status: 'paid',
-          createdAt: o.createdAt,
-          createdBy: 'system-seeder',
-          auditTrail: []
-        });
+        if (batchCount === 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          batchCount = 0;
+        }
       }
     }
 
-    // Add some historical transactions for the chart
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(now.getMonth() - i);
-      const isoDate = date.toISOString();
-      
-      await addDoc(txnRef, {
-        date: isoDate,
-        description: `Monthly Sales Performance - ${date.toLocaleString('default', { month: 'long' })}`,
-        amount: 50000 + Math.random() * 100000,
-        debitAccountId: accountMap['Bank - Al-Falah'],
-        creditAccountId: accountMap['Sales Revenue'],
-        type: 'sale'
-      });
-
-      await addDoc(txnRef, {
-        date: isoDate,
-        description: `Payroll Disbursal - ${date.toLocaleString('default', { month: 'long' })}`,
-        amount: 35000 + Math.random() * 20000,
-        debitAccountId: accountMap['Payroll Expense'],
-        creditAccountId: accountMap['Bank - Al-Falah'],
-        type: 'payroll'
-      });
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
-    console.log('Seeding completed successfully!');
-    return true;
+    console.info(`Seeded ${writeCount} Tailoring ERP records.`);
+    return {
+      ok: true,
+      writeCount,
+      users: seed.users.length,
+      clients: seed.clients.length,
+      employees: seed.employees.length,
+      orders: seed.orders.length,
+    };
   } catch (error) {
     console.error('Seeding failed:', error);
     throw error;
   }
+}
+
+export async function promoteCurrentUserToSeedAdmin(uid: string, email: string) {
+  await setDoc(doc(db, 'users', uid), {
+    ...buildSeedData().users[0],
+    uid,
+    email,
+    seededAt: serverTimestamp(),
+  }, { merge: true });
 }

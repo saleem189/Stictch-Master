@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { collection, addDoc, getDocs, doc, increment, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { AuditTrailEntry, Order, OrderItem, OrderStatus, OrderWorkflowStatus, Account } from '../types';
 import { X, Save, Clock, User, CheckCircle2, Scissors, Edit3, Truck, Archive, Info, Ruler, DollarSign } from 'lucide-react';
@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
 
 interface Props {
   order: Order;
@@ -43,7 +44,6 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
     if (paymentAmount <= 0) return;
     setLoading(true);
     try {
-      const orderRef = doc(db, 'orders', order.id);
       const newPaidAmount = (order.paidAmount || 0) + paymentAmount;
       
       const auditEntry = {
@@ -53,14 +53,19 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
         details: `Received payment of Rs. ${paymentAmount.toLocaleString()}. Total paid: Rs. ${newPaidAmount.toLocaleString()}.`
       };
 
-      // 1. Update Order
-      await updateDoc(orderRef, {
+      const accountsSnap = await getDocs(collection(db, 'accounts'));
+      const accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
+      const assetAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
+      const receivableAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.receivable], ['receivable'], 'Accounts Receivable');
+      const batch = writeBatch(db);
+
+      batch.update(doc(db, 'orders', order.id), {
         paidAmount: newPaidAmount,
         auditTrail: [...(order.auditTrail || []), auditEntry]
       });
 
-      // 2. Create Financial Document (Receipt)
-      const docRef = await addDoc(collection(db, 'financialDocuments'), {
+      const documentRef = doc(collection(db, 'financialDocuments'));
+      batch.set(documentRef, {
         type: 'receipt',
         clientId: order.clientId,
         clientName: order.clientName,
@@ -74,25 +79,17 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
         auditTrail: []
       });
 
-      // 3. Create Journal Entry
-      const accountsSnap = await getDocs(collection(db, 'accounts'));
-      const accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
-      const assetAcc = accounts.find(a => a.type === 'asset' && a.name.toLowerCase().includes('cash'));
-      const revenueAcc = accounts.find(a => a.type === 'revenue' || a.name.toLowerCase().includes('sales'));
+      appendLedgerEntryToBatch(db, batch, accounts, {
+        date: new Date().toISOString().split('T')[0],
+        description: `Order Payment: ${order.clientName} (Order #${order.id.slice(0, 8)})`,
+        amount: paymentAmount,
+        debitAccountId: assetAcc.id,
+        creditAccountId: receivableAcc.id,
+        reference: documentRef.id,
+        type: 'sale'
+      });
 
-      if (assetAcc && revenueAcc) {
-         await addDoc(collection(db, 'transactions'), {
-           date: new Date().toISOString().split('T')[0],
-           description: `Order Payment: ${order.clientName} (Order #${order.id.slice(0, 8)})`,
-           amount: paymentAmount,
-           debitAccountId: assetAcc.id,
-           creditAccountId: revenueAcc.id,
-           reference: docRef.id,
-           type: 'sale'
-         });
-         await updateDoc(doc(db, 'accounts', assetAcc.id), { balance: increment(paymentAmount) });
-         await updateDoc(doc(db, 'accounts', revenueAcc.id), { balance: increment(paymentAmount) });
-      }
+      await batch.commit();
 
       setPaymentAmount(0);
       onSuccess();

@@ -1,4 +1,4 @@
-import { MeasurementSource } from '../types';
+import { MeasurementSource, QuoteRequestStatus } from '../types';
 
 export interface QuoteRequestFormData {
   garmentType: string;
@@ -10,6 +10,13 @@ export interface QuoteRequestFormData {
 }
 
 export type QuoteRequestFormErrors = Partial<Record<keyof QuoteRequestFormData, string>>;
+
+export interface QuoteReviewFormData {
+  status: Extract<QuoteRequestStatus, 'reviewed' | 'rejected'>;
+  reviewNotes: string;
+}
+
+export type QuoteReviewFormErrors = Partial<Record<keyof QuoteReviewFormData, string>>;
 
 export function getInitialQuoteRequestForm(): QuoteRequestFormData {
   return {
@@ -33,5 +40,32 @@ export function validateQuoteRequestForm(form: QuoteRequestFormData): { valid: b
   return {
     valid: Object.keys(errors).length === 0,
     errors,
+  };
+}
+
+export function validateQuoteReview(form: QuoteReviewFormData): { valid: boolean; errors: QuoteReviewFormErrors } {
+  const errors: QuoteReviewFormErrors = {};
+
+  if (form.status === 'rejected' && !form.reviewNotes.trim()) {
+    errors.reviewNotes = 'Review notes are required when rejecting a quote';
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function buildQuoteReviewUpdate({
+  status,
+  reviewNotes,
+  reviewedBy,
+  reviewedAt = new Date().toISOString(),
+}: QuoteReviewFormData & { reviewedBy: string; reviewedAt?: string }) {
+  return {
+    status,
+    reviewNotes: reviewNotes.trim(),
+    reviewedBy,
+    updatedAt: reviewedAt,
   };
 }

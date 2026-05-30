@@ -1,6 +1,7 @@
-import { collection, getDocs, query, where, addDoc, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
-import { RecurringTransaction, TransactionFrequency } from '../types';
+import { Account, RecurringTransaction, TransactionFrequency } from '../types';
+import { appendLedgerEntryToBatch } from './ledger';
 
 export async function processRecurringTransactions() {
   const now = new Date();
@@ -16,34 +17,28 @@ export async function processRecurringTransactions() {
     const snap = await getDocs(q);
     if (snap.empty) return { processed: 0 };
 
+    const accountSnap = await getDocs(collection(db, 'accounts'));
+    const accounts = accountSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
+    const batch = writeBatch(db);
     let processedCount = 0;
 
     for (const d of snap.docs) {
       const rec = { id: d.id, ...d.data() } as RecurringTransaction;
       
-      // 1. Create Transaction (Journal Entry)
-      const txnData = {
+      appendLedgerEntryToBatch(db, batch, accounts, {
         date: todayStr,
         description: `Auto-generated: ${rec.description}`,
         amount: rec.amount,
         debitAccountId: rec.debitAccountId,
         creditAccountId: rec.creditAccountId,
-        reference: rec.id
-      };
-      await addDoc(collection(db, 'transactions'), txnData);
-
-      // 2. Update Account Balances
-      await updateDoc(doc(db, 'accounts', rec.debitAccountId), {
-        balance: increment(rec.amount)
-      });
-      await updateDoc(doc(db, 'accounts', rec.creditAccountId), {
-        balance: increment(-rec.amount)
+        reference: rec.id,
+        type: rec.type === 'revenue' ? 'sale' : 'expense',
+        metadata: { recurringTransactionId: rec.id, category: rec.category }
       });
 
-      // 3. Calculate next due date
       const nextDate = calculateNextDueDate(new Date(rec.nextDueDate), rec.frequency);
       
-      await updateDoc(doc(db, 'recurringTransactions', rec.id), {
+      batch.update(doc(db, 'recurringTransactions', rec.id), {
         lastProcessed: todayStr,
         nextDueDate: nextDate.toISOString().split('T')[0]
       });
@@ -51,6 +46,7 @@ export async function processRecurringTransactions() {
       processedCount++;
     }
 
+    await batch.commit();
     return { processed: processedCount };
   } catch (error) {
     console.error('Automation error:', error);

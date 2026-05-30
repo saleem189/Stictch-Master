@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
-import { Client, Employee, OrderItem, Order, Branch, OrderWorkflowStatus } from '../types';
+import { Account, Client, Employee, OrderItem, Order, Branch, OrderWorkflowStatus } from '../types';
 import { X, Plus, Trash2, Save, User, UserCheck, Calendar, Scissors, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { calculateOrderTotal } from '../lib/orderFinance';
 import { createNotification } from '../lib/notifications';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
 
 interface Props {
   onClose: () => void;
@@ -18,6 +19,7 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
 
   const [formData, setFormData] = useState({
     clientId: '',
@@ -35,10 +37,12 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
         const cSnap = await getDocs(query(collection(db, 'clients'), orderBy('name')));
         const eSnap = await getDocs(query(collection(db, 'employees'), orderBy('name')));
         const bSnap = await getDocs(query(collection(db, 'branches')));
+        const aSnap = await getDocs(query(collection(db, 'accounts')));
 
         setClients(cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
         setEmployees(eSnap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
         setBranches(bSnap.docs.map(d => ({ id: d.id, ...d.data() } as Branch)));
+        setAccounts(aSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account)));
       } catch (e) {
         console.error(e);
       }
@@ -68,6 +72,10 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
     try {
       const selectedClient = clients.find(c => c.id === formData.clientId);
       const totalAmount = calculateOrderTotal(formData.items);
+      const advancePayment = Math.max(0, Math.min(formData.advancePayment || 0, totalAmount));
+      const receivableAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.receivable], ['receivable'], 'Accounts Receivable');
+      const salesAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.sales], ['sales', 'revenue'], 'Sales Revenue');
+      const cashAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
 
       const orderData: Omit<Order, 'id'> = {
         clientId: formData.clientId,
@@ -81,8 +89,8 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
         })),
         status: 'pending',
         totalAmount,
-        paidAmount: 0,
-        advancePayment: formData.advancePayment,
+        paidAmount: advancePayment,
+        advancePayment,
         dueDate: formData.dueDate,
         assignedTo: formData.assignedTo,
         branchId: formData.branchId,
@@ -96,8 +104,10 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
         }]
       };
 
-      const docRef = await addDoc(collection(db, 'orders'), orderData);
-      const orderId = docRef.id;
+      const batch = writeBatch(db);
+      const orderRef = doc(collection(db, 'orders'));
+      const orderId = orderRef.id;
+      batch.set(orderRef, orderData);
 
       // Create initial tasks for the employee if one is assigned
       if (formData.assignedTo) {
@@ -105,7 +115,7 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
         const taskTypes: ('cutting' | 'stitching' | 'finishing')[] = ['cutting', 'stitching', 'finishing'];
         
         for (const type of taskTypes) {
-          await addDoc(collection(db, 'tasks'), {
+          batch.set(doc(collection(db, 'tasks')), {
             orderId: orderId,
             employeeId: formData.assignedTo,
             employeeName: employee?.name || 'Unknown',
@@ -116,15 +126,54 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
         }
       }
 
-      // Automated Ledger Entry (simplified)
-      await addDoc(collection(db, 'transactions'), {
+      appendLedgerEntryToBatch(db, batch, accounts, {
         date: new Date().toISOString(),
         description: `Revenue: New Order #${orderId.slice(0, 8)} for ${orderData.clientName}`,
         amount: totalAmount,
-        debitAccountId: 'accounts_receivable', // assume ID
-        creditAccountId: 'sales_revenue', // assume ID
-        reference: orderId
+        debitAccountId: receivableAcc.id,
+        creditAccountId: salesAcc.id,
+        reference: orderId,
+        type: 'sale'
       });
+
+      if (advancePayment > 0) {
+        batch.set(doc(collection(db, 'payments')), {
+          date: new Date().toISOString(),
+          amount: advancePayment,
+          method: 'Advance',
+          type: 'inbound',
+          entityId: orderData.clientId,
+          referenceId: orderId,
+          createdAt: new Date().toISOString()
+        });
+
+        const receiptRef = doc(collection(db, 'financialDocuments'));
+        batch.set(receiptRef, {
+          type: 'receipt',
+          clientId: orderData.clientId,
+          clientName: orderData.clientName,
+          orderId,
+          amount: advancePayment,
+          date: new Date().toISOString().split('T')[0],
+          status: 'paid',
+          notes: `Advance payment for Order #${orderId.slice(0, 8)}`,
+          createdAt: new Date().toISOString(),
+          createdBy: profile?.name || profile?.email || 'System',
+          auditTrail: ['Advance receipt generated during order creation']
+        });
+
+        appendLedgerEntryToBatch(db, batch, accounts, {
+          date: new Date().toISOString(),
+          description: `Advance Received: Order #${orderId.slice(0, 8)} - ${orderData.clientName}`,
+          amount: advancePayment,
+          debitAccountId: cashAcc.id,
+          creditAccountId: receivableAcc.id,
+          reference: receiptRef.id,
+          type: 'sale'
+        });
+      }
+
+      await batch.commit();
 
       // System Notification for Admin
       // In a real multi-user app, you'd find admins via query. 

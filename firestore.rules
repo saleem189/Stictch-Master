@@ -213,11 +213,30 @@ service cloud.firestore {
              data.measurementSource in ['existing', 'book-measurement', 'enter-later'] &&
              data.status == 'submitted';
     }
+    function isValidStaffQuoteRequest(data) {
+      return data.clientId is string &&
+             data.garmentType is string &&
+             data.garmentType.size() > 0 &&
+             data.styleNotes is string &&
+             data.styleNotes.size() > 0 &&
+             data.preferredDueDate is string &&
+             data.budgetRange is string &&
+             data.measurementSource in ['existing', 'book-measurement', 'enter-later'] &&
+             data.status in ['submitted', 'reviewed', 'converted', 'rejected'];
+    }
+    function isValidQuoteReviewUpdate(data) {
+      return data.status in ['reviewed', 'rejected'] &&
+             data.updatedAt is string &&
+             data.reviewedBy is string &&
+             data.reviewNotes is string;
+    }
     match /quoteRequests/{requestId} {
-      allow create: if isSignedIn() && isValidQuoteRequest(incoming());
+      allow create: if (isSignedIn() && isValidQuoteRequest(incoming())) ||
+                    (isEmployee() && isValidStaffQuoteRequest(incoming()));
       allow read: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
       allow update: if isEmployee() &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'reviewedBy', 'reviewNotes']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'reviewedBy', 'reviewNotes']) &&
+                    isValidQuoteReviewUpdate(incoming());
     }
 
     // Branch Rules

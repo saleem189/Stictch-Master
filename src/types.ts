@@ -230,6 +230,7 @@ export interface FinancialTransaction extends Transaction {
 export interface FinancialDocument {
   id: string;
   type: 'quotation' | 'advance-invoice' | 'final-invoice' | 'receipt' | 'refund' | 'expense' | 'payroll';
+  invoiceNumber?: string;
   clientId?: string;
   clientName?: string;
   employeeId?: string;
@@ -366,6 +367,8 @@ export interface QuoteRequest {
   measurementSource: MeasurementSource;
   inspirationNotes?: string;
   status: QuoteRequestStatus;
+  reviewedBy?: string;
+  reviewNotes?: string;
   createdAt: string;
   updatedAt: string;
 }

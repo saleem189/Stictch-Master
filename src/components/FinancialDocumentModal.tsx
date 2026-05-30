@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Client, Employee, FinancialDocument, Order } from '../types';
+import { Account, Client, Employee, FinancialDocument, Order } from '../types';
 import { X, DollarSign, Plus, Trash2, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
+import BrandLogo from './BrandLogo';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { calculateInvoiceTotal, formatCurrency, getDefaultDocumentStatus, getInvoiceNumber } from '../lib/invoices';
 
 interface Props {
   isOpen: boolean;
@@ -16,6 +19,7 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
   const { profile } = useUser();
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -39,14 +43,16 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
   }, [isOpen]);
 
   async function fetchData() {
-    const [cSnap, eSnap, oSnap] = await Promise.all([
+    const [cSnap, eSnap, oSnap, aSnap] = await Promise.all([
       getDocs(query(collection(db, 'clients'), orderBy('name'))),
       getDocs(query(collection(db, 'employees'), orderBy('name'))),
-      getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')))
+      getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
+      getDocs(query(collection(db, 'accounts')))
     ]);
     setClients(cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
     setEmployees(eSnap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
     setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
+    setAccounts(aSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account)));
   }
 
   const addItem = () => {
@@ -58,7 +64,7 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
 
   const removeItem = (index: number) => {
     const newItems = formData.items.filter((_, i) => i !== index);
-    const newAmount = newItems.reduce((sum, item) => sum + item.amount, 0);
+    const newAmount = calculateInvoiceTotal(newItems);
     setFormData({ ...formData, items: newItems, amount: newAmount });
   };
 
@@ -68,7 +74,7 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
     const newItems = [...formData.items];
     newItems[index] = { ...newItems[index], [field]: value };
     newItems[index].amount = newItems[index].quantity * newItems[index].rate;
-    const newAmount = newItems.reduce((sum, item) => sum + item.amount, 0);
+    const newAmount = calculateInvoiceTotal(newItems);
     setFormData({ ...formData, items: newItems, amount: newAmount });
   };
 
@@ -79,23 +85,37 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
       const client = clients.find(c => c.id === formData.clientId);
       const employee = employees.find(e => e.id === formData.employeeId);
       const order = orders.find(o => o.id === formData.orderId);
+      const documentRef = doc(collection(db, 'financialDocuments'));
+      const batch = writeBatch(db);
 
-      await addDoc(collection(db, 'financialDocuments'), {
+      batch.set(documentRef, {
         ...formData,
+        invoiceNumber: getInvoiceNumber(formData.type, formData.date, documentRef.id),
         clientName: client?.name || 'N/A',
         employeeName: employee?.name || 'N/A',
         orderId: order?.id || '',
-        status: formData.type === 'receipt' ? 'paid' : 'issued',
+        status: getDefaultDocumentStatus(formData.type),
         createdAt: new Date().toISOString(),
         createdBy: profile?.name || profile?.email || 'System',
         auditTrail: []
       });
 
-      // If it's a receipt or paid invoice, update ledger
       if (formData.type === 'receipt' || formData.type === 'final-invoice') {
-         // Create Transaction logic...
+         const cashAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
+         const receivableAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.receivable], ['receivable'], 'Accounts Receivable');
+         const salesAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.sales], ['sales', 'revenue'], 'Sales Revenue');
+         appendLedgerEntryToBatch(db, batch, accounts, {
+           date: formData.date,
+           description: `${formData.type === 'receipt' ? 'Receipt' : 'Invoice'}: ${client?.name || order?.clientName || 'Client'} (${documentRef.id.slice(0, 8)})`,
+           amount: formData.amount,
+           debitAccountId: formData.type === 'receipt' ? cashAcc.id : receivableAcc.id,
+           creditAccountId: formData.type === 'receipt' ? receivableAcc.id : salesAcc.id,
+           reference: documentRef.id,
+           type: 'sale'
+         });
       }
 
+      await batch.commit();
       onSuccess();
       onClose();
     } catch (e) {
@@ -113,7 +133,7 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+        className="bg-white w-full max-w-6xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
       >
         <header className="px-8 py-6 bg-slate-900 text-white flex items-center justify-between">
            <div className="flex items-center gap-3">
@@ -127,7 +147,8 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
            </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="grid gap-0 overflow-hidden lg:grid-cols-[1fr_0.9fr]">
+          <div className="max-h-[calc(92vh-5.75rem)] space-y-6 overflow-y-auto p-8">
            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Document Type</label>
@@ -257,8 +278,112 @@ export default function FinancialDocumentModal({ isOpen, onClose, onSuccess }: P
            >
               {loading ? 'Processing Ledger...' : 'Commit Document'}
            </button>
+          </div>
+          <InvoicePreview
+            type={formData.type}
+            date={formData.date}
+            id="draft"
+            clientName={clients.find(c => c.id === formData.clientId)?.name || orders.find(o => o.id === formData.orderId)?.clientName || 'Client Name'}
+            orderId={formData.orderId}
+            items={formData.items}
+            amount={formData.amount}
+            notes={formData.notes}
+          />
         </form>
       </motion.div>
     </div>
+  );
+}
+
+function InvoicePreview({
+  type,
+  date,
+  id,
+  clientName,
+  orderId,
+  items,
+  amount,
+  notes,
+}: {
+  type: FinancialDocument['type'];
+  date: string;
+  id: string;
+  clientName: string;
+  orderId: string;
+  items: NonNullable<FinancialDocument['items']>;
+  amount: number;
+  notes: string;
+}) {
+  const total = amount || calculateInvoiceTotal(items);
+
+  return (
+    <aside className="hidden border-l border-slate-200 bg-slate-100/70 p-6 lg:block">
+      <div className="mx-auto min-h-full rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/80">
+        <div className="flex items-start justify-between gap-6 border-b border-slate-100 pb-8">
+          <BrandLogo markClassName="h-12 w-12 rounded-2xl" textClassName="text-xl" />
+          <div className="text-right">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Document</p>
+            <h3 className="mt-1 text-2xl font-black uppercase italic tracking-tight text-slate-900">
+              {type.replace('-', ' ')}
+            </h3>
+            <p className="mt-2 font-mono text-[10px] font-black uppercase tracking-widest text-indigo-600">
+              {getInvoiceNumber(type, date, id)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-6 border-b border-slate-100 py-8">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bill To</p>
+            <p className="mt-2 text-lg font-black text-slate-900">{clientName}</p>
+            {orderId && <p className="mt-1 font-mono text-[10px] font-bold uppercase text-slate-400">Order #{orderId.slice(0, 8)}</p>}
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Issue Date</p>
+            <p className="mt-2 text-sm font-black text-slate-900">{date || new Date().toISOString().slice(0, 10)}</p>
+            <span className="mt-3 inline-flex rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-600">
+              {getDefaultDocumentStatus(type)}
+            </span>
+          </div>
+        </div>
+
+        <div className="py-8">
+          <div className="grid grid-cols-[1fr_56px_88px_96px] gap-3 border-b border-slate-200 pb-3 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            <span>Description</span>
+            <span className="text-right">Qty</span>
+            <span className="text-right">Rate</span>
+            <span className="text-right">Amount</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {items.map((item, index) => (
+              <div key={`${item.description}-${index}`} className="grid grid-cols-[1fr_56px_88px_96px] gap-3 py-4 text-xs">
+                <span className="font-bold text-slate-700">{item.description || 'Line item'}</span>
+                <span className="text-right font-mono font-bold text-slate-500">{item.quantity}</span>
+                <span className="text-right font-mono font-bold text-slate-500">{formatCurrency(item.rate)}</span>
+                <span className="text-right font-mono font-black text-slate-900">{formatCurrency(item.quantity * item.rate)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="ml-auto max-w-xs space-y-3 border-t border-slate-100 pt-6">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Subtotal</span>
+            <span className="font-mono text-sm font-black text-slate-900">{formatCurrency(total)}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl bg-slate-950 px-5 py-4 text-white">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>
+            <span className="font-mono text-xl font-black">{formatCurrency(total)}</span>
+          </div>
+        </div>
+
+        {notes && (
+          <div className="mt-8 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Notes</p>
+            <p className="mt-2 text-xs font-medium leading-5 text-slate-500">{notes}</p>
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }

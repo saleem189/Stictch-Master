@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, doc, updateDoc, increment, query, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, increment, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Vendor, VendorBill, Payment } from '../types';
+import { Account, Vendor, VendorBill, Payment } from '../types';
 import { Truck, Receipt, Plus, Wallet, ArrowRightLeft, X, Save, Edit2, ChevronDown, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import VendorModal from '../components/VendorModal';
 import VendorBillModal from '../components/VendorBillModal';
 import { InventoryItem } from '../types';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
 
 export default function Vendors() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [bills, setBills] = useState<VendorBill[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [expandedBillId, setExpandedBillId] = useState<string | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
@@ -39,11 +41,13 @@ export default function Vendors() {
       const bSnap = await getDocs(collection(db, 'vendorBills'));
       const pSnap = await getDocs(query(collection(db, 'payments'), orderBy('date', 'desc')));
       const iSnap = await getDocs(collection(db, 'inventory'));
+      const aSnap = await getDocs(collection(db, 'accounts'));
       
       setVendors(vSnap.docs.map(d => ({ id: d.id, ...d.data() } as Vendor)));
       setBills(bSnap.docs.map(d => ({ id: d.id, ...d.data() } as VendorBill)));
       setPayments(pSnap.docs.map(d => ({ id: d.id, ...d.data() } as Payment)).filter(p => p.type === 'outbound'));
       setInventory(iSnap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryItem)));
+      setAccounts(aSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account)));
     } catch (e) {
       handleFirestoreError(e, OperationType.GET, 'vendors');
     }
@@ -54,7 +58,10 @@ export default function Vendors() {
     if (!paymentData.vendorId || paymentData.amount <= 0) return;
 
     try {
-      // 1. Create Payment Record
+      const payableAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.vendorPayable], ['payable'], 'Vendor Payables');
+      const cashAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
+      const batch = writeBatch(db);
+
       const newPayment: Omit<Payment, 'id'> = {
         date: new Date().toISOString(),
         amount: paymentData.amount,
@@ -63,36 +70,35 @@ export default function Vendors() {
         entityId: paymentData.vendorId,
         referenceId: paymentData.billId || 'general_payment'
       };
-      await addDoc(collection(db, 'payments'), newPayment);
+      batch.set(doc(collection(db, 'payments')), newPayment);
 
-      // 2. Update Vendor Balance
-      await updateDoc(doc(db, 'vendors', paymentData.vendorId), {
+      batch.update(doc(db, 'vendors', paymentData.vendorId), {
         balance: increment(-paymentData.amount)
       });
 
-      // 3. Update Bill status if applicable
       if (paymentData.billId) {
         const bill = bills.find(b => b.id === paymentData.billId);
         if (bill) {
           const newPaidAmount = (bill.paidAmount || 0) + paymentData.amount;
           const newStatus = newPaidAmount >= bill.amount ? 'paid' : 'partial';
-          await updateDoc(doc(db, 'vendorBills', paymentData.billId), {
+          batch.update(doc(db, 'vendorBills', paymentData.billId), {
             paidAmount: newPaidAmount,
             status: newStatus
           });
         }
       }
 
-      // 4. Create Transaction Entry
-      await addDoc(collection(db, 'transactions'), {
+      appendLedgerEntryToBatch(db, batch, accounts, {
         date: new Date().toISOString(),
         description: `Vendor Payment: ${vendors.find(v => v.id === paymentData.vendorId)?.name}${paymentData.billId ? ` (Bill Ref: ${paymentData.billId.slice(-6)})` : ''}`,
         amount: paymentData.amount,
-        debitAccountId: 'accounts_payable',
-        creditAccountId: 'cash_at_bank',
-        reference: paymentData.vendorId
+        debitAccountId: payableAcc.id,
+        creditAccountId: cashAcc.id,
+        reference: paymentData.billId || paymentData.vendorId,
+        type: 'purchase'
       });
 
+      await batch.commit();
       setIsPaymentModalOpen(false);
       setPaymentData({ vendorId: '', amount: 0, method: 'Cash', billId: '' });
       fetchData();

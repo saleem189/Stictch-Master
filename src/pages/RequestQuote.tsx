@@ -9,6 +9,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { getInitialQuoteRequestForm, QuoteRequestFormData, QuoteRequestFormErrors, validateQuoteRequestForm } from '../lib/quoteRequests';
 import { useTranslation } from 'react-i18next';
 import BrandLogo from '../components/BrandLogo';
+import { ModuleCard, PageShell } from '../components/layout/AppLayout';
 
 export default function RequestQuote() {
   const { t } = useTranslation();
@@ -57,14 +58,15 @@ export default function RequestQuote() {
   };
 
   return (
-    <main className="min-h-[100dvh] bg-slate-50 px-4 py-10 text-slate-900 sm:px-8">
-      <section className="mx-auto max-w-3xl">
+    <main className="min-h-[100dvh] bg-slate-50 text-slate-900">
+      <PageShell maxWidthClassName="max-w-3xl" className="py-8 sm:py-10">
+      <section>
         <Link to="/client" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-600">
           <ArrowLeft size={14} />
           Back to portal
         </Link>
 
-        <div className="mt-6 rounded-[2.5rem] border border-slate-200 bg-white shadow-sm">
+        <ModuleCard className="mt-6 overflow-hidden">
           <div className="border-b border-slate-100 p-8">
             <BrandLogo showText={false} markClassName="h-14 w-14" />
             <h1 className="mt-6 text-4xl font-black uppercase italic tracking-tight">{t('Request Bespoke Quote')}</h1>
@@ -174,8 +176,9 @@ export default function RequestQuote() {
               {submitting ? 'Submitting...' : t('Submit Quote Request')}
             </button>
           </form>
-        </div>
+        </ModuleCard>
       </section>
+      </PageShell>
     </main>
   );
 }

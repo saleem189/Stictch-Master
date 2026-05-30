@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, increment, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Vendor, InventoryItem } from '../types';
+import { Account, Vendor, InventoryItem } from '../types';
 import { X, Save, Receipt, Search, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
 
 interface VendorBillModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface VendorBillModalProps {
 export default function VendorBillModal({ isOpen, onClose, onSuccess }: VendorBillModalProps) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     vendorId: '',
@@ -31,8 +33,10 @@ export default function VendorBillModal({ isOpen, onClose, onSuccess }: VendorBi
     try {
       const vSnap = await getDocs(collection(db, 'vendors'));
       const iSnap = await getDocs(collection(db, 'inventory'));
+      const aSnap = await getDocs(collection(db, 'accounts'));
       setVendors(vSnap.docs.map(d => ({ id: d.id, ...d.data() } as Vendor)));
       setInventory(iSnap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryItem)));
+      setAccounts(aSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account)));
     } catch (e) {
       handleFirestoreError(e, OperationType.GET, 'bill_context');
     }
@@ -69,6 +73,8 @@ export default function VendorBillModal({ isOpen, onClose, onSuccess }: VendorBi
     setSubmitting(true);
     try {
       const batch = writeBatch(db);
+      const inventoryAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.inventory], ['inventory', 'fabric'], 'Fabric Inventory');
+      const payableAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.vendorPayable], ['payable'], 'Vendor Payables');
 
       // 1. Create bill
       const billRef = doc(collection(db, 'vendorBills'));
@@ -96,15 +102,14 @@ export default function VendorBillModal({ isOpen, onClose, onSuccess }: VendorBi
         }
       }
 
-      // 4. Create Transaction Entry
-      const transactionRef = doc(collection(db, 'transactions'));
-      batch.set(transactionRef, {
+      appendLedgerEntryToBatch(db, batch, accounts, {
         date: new Date().toISOString(),
         description: `Vendor Procurement: ${vendors.find(v => v.id === formData.vendorId)?.name} (Bill Ref: ${billRef.id.slice(-6)})`,
         amount: totalAmount,
-        debitAccountId: 'expense_purchases',
-        creditAccountId: 'accounts_payable',
-        reference: billRef.id
+        debitAccountId: inventoryAcc.id,
+        creditAccountId: payableAcc.id,
+        reference: billRef.id,
+        type: 'purchase'
       });
 
       await batch.commit();

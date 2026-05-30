@@ -42,21 +42,21 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-white text-slate-900 min-h-screen font-sans">
+    <div className="bg-white text-slate-900 min-h-screen overflow-x-hidden font-sans">
       {/* Navigation */}
-      <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-xl z-50 border-b border-slate-100/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BrandLogo markClassName="h-11 w-11 sm:h-12 sm:w-12" textClassName="text-xl sm:text-2xl leading-none" />
+      <nav className="fixed top-0 w-full overflow-x-hidden bg-white/80 backdrop-blur-xl z-50 border-b border-slate-100/60">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-6 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandLogo className="min-w-0" markClassName="h-10 w-10 sm:h-12 sm:w-12" textClassName="truncate text-lg sm:text-2xl leading-none" />
           </div>
           
-          <div className="flex items-center gap-4 sm:gap-10">
+          <div className="flex shrink-0 items-center gap-3 sm:gap-10">
             <div className="hidden lg:flex items-center gap-8 text-[11px] font-black uppercase tracking-widest text-slate-400">
               <a href="#services" className="hover:text-indigo-600 transition-colors">Experience</a>
               <a href="#tracking" className="hover:text-indigo-600 transition-colors">Tracking</a>
               <a href="#contact" className="hover:text-indigo-600 transition-colors">Philosophy</a>
             </div>
-            <Link to="/admin" className="px-4 sm:px-7 py-2.5 sm:py-3.5 bg-slate-950 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest whitespace-nowrap hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">
+            <Link to="/admin" className="px-3 sm:px-7 py-2.5 sm:py-3.5 bg-slate-950 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest whitespace-nowrap hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">
               <span className="sm:hidden">Admin</span>
               <span className="hidden sm:inline">Admin Console</span>
             </Link>
@@ -65,29 +65,29 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 sm:pt-48 pb-20 px-4 sm:px-8">
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 lg:gap-24 items-center">
+      <section className="overflow-x-hidden pt-32 sm:pt-48 pb-20 px-4 sm:px-8">
+        <div className="mx-auto grid w-full max-w-7xl items-center gap-12 sm:gap-16 lg:grid-cols-2 lg:gap-24">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="space-y-8 sm:space-y-12"
+            className="w-full min-w-0 space-y-8 sm:max-w-xl sm:space-y-12 lg:max-w-none"
           >
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">
               <Star size={14} />
               <span>Couture & Precision</span>
             </div>
-            <h1 className="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tight leading-[0.95] text-slate-900">
+            <h1 className="max-w-full break-words text-4xl min-[380px]:text-5xl sm:text-7xl lg:text-8xl font-black tracking-tight leading-[0.95] text-slate-900">
               The Art of the <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Perfect Fit.</span>
             </h1>
-            <p className="text-lg sm:text-xl text-slate-500 leading-relaxed max-w-xl font-medium">
+            <p className="max-w-full text-lg sm:max-w-xl sm:text-xl text-slate-500 leading-relaxed font-medium">
               We've digitized the bespoke experience. High-end tailoring meets modern efficiency for the modern individual who demands excellence in every thread.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/client/request-quote" className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-100 group">
+              <Link to="/client/request-quote" className="w-full max-w-full sm:w-auto px-6 sm:px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs text-center leading-5 flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-100 group">
                 {t('Request Bespoke Quote')} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
               </Link>
-              <a href="#tracking" className="px-10 py-5 bg-white border border-slate-200 text-slate-900 rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-slate-50 transition-all flex items-center justify-center">
+              <a href="#tracking" className="w-full max-w-full sm:w-auto px-6 sm:px-10 py-5 bg-white border border-slate-200 text-slate-900 rounded-[2rem] font-black uppercase tracking-widest text-xs text-center leading-5 hover:bg-slate-50 transition-all flex items-center justify-center">
                 {t('Track Existing Order')}
               </a>
             </div>
@@ -97,7 +97,7 @@ export default function Home() {
             initial={{ opacity: 0, scale: 0.95, y: 40 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
-            className="relative"
+            className="relative w-full min-w-0"
           >
             <div className="aspect-[4/5] rounded-[3rem] overflow-hidden shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] relative z-10 border-8 border-white bg-slate-900">
               {!heroImageLoaded && (
@@ -123,7 +123,7 @@ export default function Home() {
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent"></div>
             </div>
             
-            <div className="absolute -bottom-10 -right-4 sm:-right-10 bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-2xl z-20 border border-slate-100 flex items-center gap-6 animate-bounce-subtle">
+            <div className="relative z-20 mt-4 flex items-center gap-4 rounded-[2rem] border border-slate-100 bg-white p-5 shadow-2xl sm:absolute sm:-bottom-10 sm:-right-10 sm:mt-0 sm:gap-6 sm:rounded-[2.5rem] sm:p-8 sm:animate-bounce-subtle">
               <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center shadow-inner">
                 <CheckCircle2 size={32} />
               </div>
@@ -133,7 +133,7 @@ export default function Home() {
               </div>
             </div>
             
-            <div className="absolute -top-12 -left-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-[100px] -z-10" />
+            <div className="absolute -top-12 -left-12 hidden w-64 h-64 bg-indigo-500/10 rounded-full blur-[100px] -z-10 sm:block" />
           </motion.div>
         </div>
       </section>

@@ -8,6 +8,7 @@ import { Order, QuoteRequest } from '../types';
 import { useTranslation } from 'react-i18next';
 import BrandLogo from '../components/BrandLogo';
 import { useFirestoreQuery } from '../hooks/useFirestoreQuery';
+import { ModuleCard, PageHeader, PageShell } from '../components/layout/AppLayout';
 
 const statusClassNames: Record<string, string> = {
   pending: 'bg-slate-100 text-slate-600 border-slate-200',
@@ -50,7 +51,8 @@ export default function ClientDashboard() {
 
   return (
     <main className="min-h-[100dvh] bg-slate-50 text-slate-900">
-      <section className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 sm:px-8">
+      <PageShell maxWidthClassName="max-w-6xl" className="py-8 sm:py-10">
+      <section className="flex flex-col gap-8">
         <div className="flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-3">
             <BrandLogo markClassName="h-11 w-11" textClassName="text-xl" />
@@ -61,19 +63,21 @@ export default function ClientDashboard() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('Client Portal')}</p>
-            <h1 className="mt-3 text-4xl font-black uppercase italic tracking-tight text-slate-900">
-              Welcome, {profile?.name || user?.displayName || 'Client'}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
-              Track your bespoke work, manage quote requests, and keep measurements ready for your next garment.
+          <ModuleCard className="p-8">
+            <PageHeader
+              eyebrow={t('Client Portal')}
+              title={`Welcome, ${profile?.name || user?.displayName || 'Client'}`}
+              description={(
+                <>
+                  Track your bespoke work, manage quote requests, and keep measurements ready for your next garment.
               {fromCache && <span className="ml-2 font-black uppercase text-amber-600">Offline cache</span>}
               {hasPendingWrites && <span className="ml-2 font-black uppercase text-indigo-600">Syncing</span>}
-            </p>
-          </div>
+                </>
+              )}
+            />
+          </ModuleCard>
 
-          <div className="rounded-[2.5rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-sm">
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-sm sm:rounded-[2.5rem]">
             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Next Step</p>
             <h2 className="mt-3 text-2xl font-black uppercase italic tracking-tight">Start a new piece</h2>
             <p className="mt-3 text-sm font-medium leading-6 text-slate-400">
@@ -86,16 +90,16 @@ export default function ClientDashboard() {
         </div>
 
         {loading ? (
-          <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 text-sm font-bold text-slate-400 shadow-sm">
+          <ModuleCard className="p-8 text-sm font-bold text-slate-400">
             Syncing your tailoring account...
-          </div>
+          </ModuleCard>
         ) : dataError ? (
-          <div className="rounded-[2.5rem] border border-red-100 bg-red-50 p-8 text-sm font-bold text-red-600 shadow-sm">
+          <div className="rounded-[2rem] border border-red-100 bg-red-50 p-8 text-sm font-bold text-red-600 shadow-sm sm:rounded-[2.5rem]">
             Your client portal could not load live data. Please check your connection and sign-in permissions.
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">
-            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+            <ModuleCard className="p-6 lg:col-span-2">
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('Active Orders')}</p>
@@ -128,9 +132,9 @@ export default function ClientDashboard() {
                   ))
                 )}
               </div>
-            </section>
+            </ModuleCard>
 
-            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <ModuleCard className="p-6">
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('Quote Requests')}</p>
@@ -162,11 +166,11 @@ export default function ClientDashboard() {
                   ))
                 )}
               </div>
-            </section>
+            </ModuleCard>
           </div>
         )}
 
-        <section className="rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <ModuleCard className="p-6">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
               <Ruler size={22} />
@@ -176,8 +180,9 @@ export default function ClientDashboard() {
               <h2 className="text-lg font-black text-slate-900">Measurement profile will be confirmed during quote review.</h2>
             </div>
           </div>
-        </section>
+        </ModuleCard>
       </section>
+      </PageShell>
     </main>
   );
 }

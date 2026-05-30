@@ -16,7 +16,7 @@ export default function BrandLogo({
   dark = false,
 }: BrandLogoProps) {
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
+    <div className={`flex min-w-0 items-center gap-3 ${className}`}>
       <div className={`relative shrink-0 overflow-hidden rounded-2xl border ${dark ? 'border-white/10 bg-white' : 'border-slate-200 bg-white'} shadow-sm ${markClassName}`}>
         <img
           src={logoUrl}
@@ -25,7 +25,7 @@ export default function BrandLogo({
         />
       </div>
       {showText && (
-        <span className={`font-black uppercase tracking-tight ${dark ? 'text-white' : 'text-slate-900'} ${textClassName}`}>
+        <span className={`min-w-0 font-black uppercase tracking-tight ${dark ? 'text-white' : 'text-slate-900'} ${textClassName}`}>
           Tailoring<span className="text-indigo-600">ERP</span>
         </span>
       )}

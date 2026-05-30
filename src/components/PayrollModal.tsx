@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, updateDoc, doc, increment } from 'firebase/firestore';
+import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee, PayrollRecord, Account } from '../types';
 import { X, Zap, ShieldCheck, AlertCircle, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
 
 interface Props {
   isOpen: boolean;
@@ -65,43 +66,37 @@ export default function PayrollModal({ isOpen, onClose, onSuccess, employees }: 
     setLoading(true);
     try {
       const expenseAcc = accounts.find(a => a.type === 'expense');
-      const assetAcc = accounts.find(a => a.type === 'asset' && a.name.toLowerCase().includes('cash'));
+      const assetAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
 
       if (!expenseAcc || !assetAcc) {
         toast.error('Ledger accounts not configured.');
         return;
       }
 
-      for (const record of records) {
-        // 1. Create Payroll Record
-        const payrollRef = await addDoc(collection(db, 'payrollRecords'), {
-          ...record,
-          status: 'paid',
-          payoutDate: new Date().toISOString().split('T')[0],
-          approvedBy: profile.uid,
-          approvedAt: new Date().toISOString()
-        });
+      const batch = writeBatch(db);
 
-        // 2. Create Journal Entry
-        const txnRef = await addDoc(collection(db, 'transactions'), {
+      for (const record of records) {
+        const payrollRef = doc(collection(db, 'payrollRecords'));
+        const txnRef = appendLedgerEntryToBatch(db, batch, accounts, {
           date: new Date().toISOString().split('T')[0],
           description: `Payroll Payout: ${record.employeeName} (${record.month})`,
-          amount: record.netSalary,
+          amount: record.netSalary || 0,
           debitAccountId: expenseAcc.id,
           creditAccountId: assetAcc.id,
           reference: payrollRef.id,
           type: 'payroll'
         });
 
-        // 3. Update Balances
-        await updateDoc(doc(db, 'accounts', expenseAcc.id), { balance: increment(record.netSalary!) });
-        await updateDoc(doc(db, 'accounts', assetAcc.id), { balance: increment(-(record.netSalary!)) });
-        
-        // 4. Link Txn to Payroll
-        await updateDoc(payrollRef, { transactionId: txnRef.id });
+        batch.set(payrollRef, {
+          ...record,
+          status: 'paid',
+          payoutDate: new Date().toISOString().split('T')[0],
+          approvedBy: profile.uid,
+          approvedAt: new Date().toISOString(),
+          transactionId: txnRef.id
+        });
 
-        // 5. Audit Log
-        await addDoc(collection(db, 'auditLogs'), {
+        batch.set(doc(collection(db, 'auditLogs')), {
           actorId: profile.uid,
           actorName: profile.name || profile.email,
           action: 'PAYROLL_PROCESSED',
@@ -112,6 +107,7 @@ export default function PayrollModal({ isOpen, onClose, onSuccess, employees }: 
         });
       }
 
+      await batch.commit();
       toast.success('Payroll processed successfully.');
       onSuccess();
       onClose();

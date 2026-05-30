@@ -8,6 +8,7 @@ import FinancialDocumentModal from '../components/FinancialDocumentModal';
 import { toast } from 'react-hot-toast';
 
 import { useTranslation } from 'react-i18next';
+import { getInvoiceNumber } from '../lib/invoices';
 
 export default function Accounting() {
   const { t } = useTranslation();
@@ -268,7 +269,7 @@ export default function Accounting() {
                        <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors group">
                           <td className="px-6 py-4 text-xs font-bold text-slate-600 font-mono italic">{new Date(doc.date).toLocaleDateString()}</td>
                           <td className="px-6 py-4">
-                             <p className="text-[10px] font-black text-slate-400 font-mono tracking-widest">DOC-{doc.id.slice(0, 6).toUpperCase()}</p>
+                             <p className="text-[10px] font-black text-slate-400 font-mono tracking-widest">{doc.invoiceNumber || getInvoiceNumber(doc.type, doc.date, doc.id)}</p>
                           </td>
                           <td className="px-6 py-4">
                              <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${

@@ -25,6 +25,7 @@ import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { exportToCSV } from '../lib/exportUtils';
 import { seedDatabase } from '../lib/seeder';
+import { PageHeader, PageShell } from '../components/layout/AppLayout';
 
 const QuickAction = ({ icon: Icon, label, color, onClick }: { icon: React.ElementType, label: string, color: string, onClick: () => void }) => (
   <button 
@@ -243,24 +244,23 @@ export default function Dashboard() {
   );
 
   return (
-    <div id="dashboard-container" className="p-4 sm:p-8 pb-32 space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <PageShell className="animate-in fade-in duration-500">
+      <div id="dashboard-container" className="space-y-8">
       {/* Header */}
-      <div id="dashboard-header" className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight italic uppercase">{t('Intelligence Dashboard')}</h1>
-          <p className="text-sm sm:text-base text-slate-500 font-medium">
-            {t('Intelligence Dashboard Subtitle', { count: stats.activeOrders })}
-          </p>
-        </div>
-        <div id="dashboard-header-actions" className="flex flex-wrap items-center gap-4">
+      <PageHeader
+        eyebrow={t('Operations')}
+        title={t('Intelligence Dashboard')}
+        description={t('Intelligence Dashboard Subtitle', { count: stats.activeOrders })}
+        actions={(
+          <>
            <button 
              id="btn-seed-data"
              onClick={async () => {
                if(confirm('This will populate the database with sample data. Continue?')) {
                  const tid = toast.loading('Seeding intelligence matrix...');
                  try {
-                   await seedDatabase();
-                   toast.success('Database seeded successfully!', { id: tid });
+                   const result = await seedDatabase();
+                   toast.success(`Seeded ${result.writeCount} RBAC demo records.`, { id: tid });
                    window.location.reload();
                  } catch {
                    toast.error('Seeding failed. Check console.', { id: tid });
@@ -293,8 +293,9 @@ export default function Dashboard() {
              <Zap size={18} />
              {t('Live Order Entry')}
            </button>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
       {/* Quick Actions Scroll */}
       <div id="quick-actions-bar" className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -480,7 +481,8 @@ export default function Dashboard() {
           />
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </PageShell>
   );
 }
 

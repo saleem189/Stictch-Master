@@ -94,7 +94,7 @@ export default function NotificationBell() {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden"
+              className="fixed right-4 left-4 top-16 mt-2 max-h-[calc(100dvh-5rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:w-80 sm:max-h-none"
             >
               <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
                 <span className="text-sm font-bold uppercase tracking-widest">Notifications</span>

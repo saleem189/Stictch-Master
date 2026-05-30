@@ -14,7 +14,9 @@ import {
   Calendar,
   MapPin,
   Wifi,
-  WifiOff
+  WifiOff,
+  FileText,
+  MoreHorizontal
 } from 'lucide-react';
 import React from 'react';
 import { auth } from './lib/firebase';
@@ -41,29 +43,84 @@ import Appointments from './pages/Appointments';
 import Branches from './pages/Branches';
 import ClientDashboard from './pages/ClientDashboard';
 import RequestQuote from './pages/RequestQuote';
+import QuoteRequests from './pages/QuoteRequests';
 import { canAccessAdminRoutes, canAccessClientRoutes, getRoleLandingPath } from './lib/roleRouting';
+import { canRenderBeforeAuthReady } from './lib/publicRoutes';
+import { adminNavItems, getAdminNavGroups, getPrimaryMobileAdminNavItems, type AdminNavItemConfig } from './lib/adminNavigation';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SidebarItem = ({ to, icon: Icon, label, active, key }: { to: string, icon: any, label: string, active: boolean, key?: string }) => (
+const navIcons: Record<string, React.ElementType> = {
+  '/admin': LayoutDashboard,
+  '/admin/orders': ShoppingBag,
+  '/admin/quotes': FileText,
+  '/admin/clients': Users,
+  '/admin/appointments': Calendar,
+  '/admin/inventory': Package,
+  '/admin/vendors': Truck,
+  '/admin/accounting': BookOpen,
+  '/admin/employees': UserCircle,
+  '/admin/branches': MapPin,
+  '/admin/profile': UserCircle,
+};
+
+const getNavIcon = (item: Pick<AdminNavItemConfig, 'to'>) => navIcons[item.to] || LayoutDashboard;
+
+const isRouteActive = (pathname: string, to: string) => (
+  to === '/admin' ? pathname === '/admin' : pathname === to || pathname.startsWith(`${to}/`)
+);
+
+const SidebarItem = ({ to, icon: Icon, label, active }: { to: string, icon: React.ElementType, label: string, active: boolean }) => (
   <Link 
     to={to} 
-    key={key}
-    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all ${
-      active ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+    className={`group flex items-center gap-3 rounded-2xl px-4 py-3 transition-all ${
+      active ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
     }`}
   >
     <Icon size={18} />
-    <span className="text-sm font-medium">{label}</span>
+    <span className="text-sm font-black">{label}</span>
     {active && <motion.div layoutId="active" className="ml-auto w-1.5 h-1.5 rounded-full bg-white" />}
   </Link>
 );
+
+const NavSection = ({
+  title,
+  items,
+  pathname,
+  onNavigate,
+}: {
+  title: string;
+  items: AdminNavItemConfig[];
+  pathname: string;
+  onNavigate?: () => void;
+}) => {
+  const { t } = useTranslation();
+  if (items.length === 0) return null;
+
+  return (
+    <div>
+      <div className="mb-3 px-3 text-[10px] font-black uppercase tracking-widest text-slate-500/80">{title}</div>
+      <nav className="space-y-1">
+        {items.map((item) => (
+          <div key={item.to} onClick={onNavigate}>
+            <SidebarItem
+              to={item.to}
+              icon={getNavIcon(item)}
+              label={t(item.labelKey)}
+              active={isRouteActive(pathname, item.to)}
+            />
+          </div>
+        ))}
+      </nav>
+    </div>
+  );
+};
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const { user, profile, isAdmin } = useUser();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [isMoreOpen, setIsMoreOpen] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -76,48 +133,27 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  useEffect(() => {
-    document.documentElement.dir = i18n.language === 'ur' ? 'rtl' : 'ltr';
-    document.documentElement.lang = i18n.language;
-  }, [i18n.language]);
-
-  const navItems = [
-    { to: "/admin", icon: LayoutDashboard, label: t('Dashboard'), adminOnly: false },
-    { to: "/admin/orders", icon: ShoppingBag, label: t('Work Orders'), adminOnly: false },
-    { to: "/admin/clients", icon: Users, label: t('Clients'), adminOnly: false },
-    { to: "/admin/appointments", icon: Calendar, label: t('Appointments'), adminOnly: false },
-    { to: "/admin/inventory", icon: Package, label: t('Inventory'), adminOnly: false },
-    { to: "/admin/vendors", icon: Truck, label: t('Vendors'), adminOnly: true },
-    { to: "/admin/accounting", icon: BookOpen, label: t('General Ledger'), adminOnly: true },
-    { to: "/admin/employees", icon: UserCircle, label: t('Employees'), adminOnly: true },
-    { to: "/admin/branches", icon: MapPin, label: t('Branches'), adminOnly: true },
-    { to: "/admin/profile", icon: UserCircle, label: t('My Profile'), adminOnly: false },
-  ];
-
-  const visibleNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
+  const navGroups = React.useMemo(() => getAdminNavGroups(isAdmin), [isAdmin]);
+  const mobilePrimaryItems = React.useMemo(() => getPrimaryMobileAdminNavItems(navGroups), [navGroups]);
+  const moreItems = React.useMemo(
+    () => adminNavItems.filter(item => !mobilePrimaryItems.some(primary => primary.to === item.to) && (!item.adminOnly || isAdmin)),
+    [isAdmin, mobilePrimaryItems]
+  );
+  const currentItem = React.useMemo(
+    () => adminNavItems.find(item => isRouteActive(location.pathname, item.to)),
+    [location.pathname]
+  );
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-slate-300">
-      <div className="h-16 flex items-center gap-3 px-6 border-b border-white/5">
+      <div className="flex min-h-20 items-center gap-3 border-b border-white/5 px-6">
         <BrandLogo dark markClassName="h-9 w-9 rounded-xl" textClassName="text-lg italic" />
       </div>
       
-      <div className="p-4 flex-1 space-y-6 overflow-y-auto">
-        <div>
-          <div className="text-[10px] uppercase font-bold text-slate-500 mb-3 px-3 tracking-widest opacity-60">Main Menu</div>
-          <nav className="space-y-1">
-            {visibleNavItems.map((item) => (
-              <div key={item.to} onClick={() => setIsSidebarOpen(false)}>
-                <SidebarItem 
-                  to={item.to}
-                  icon={item.icon}
-                  label={item.label}
-                  active={location.pathname === item.to} 
-                />
-              </div>
-            ))}
-          </nav>
-        </div>
+      <div className="flex-1 space-y-8 overflow-y-auto p-4">
+        <NavSection title={t('Operations')} items={navGroups.primary} pathname={location.pathname} onNavigate={() => setIsSidebarOpen(false)} />
+        <NavSection title={t('Administration')} items={navGroups.admin} pathname={location.pathname} onNavigate={() => setIsSidebarOpen(false)} />
+        <NavSection title={t('Account')} items={navGroups.account} pathname={location.pathname} onNavigate={() => setIsSidebarOpen(false)} />
       </div>
 
       <div className="p-4 border-t border-white/5 bg-slate-950/50">
@@ -142,9 +178,9 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   );
 
   return (
-    <div id="admin-layout" className="flex h-[100dvh] bg-slate-50 overflow-hidden font-sans text-slate-900 border-t-2 border-indigo-600">
+    <div id="admin-layout" className="flex h-[100dvh] bg-slate-50 overflow-hidden font-sans text-slate-900">
       {/* Sidebar - Desktop */}
-      <aside id="sidebar-desktop" className="hidden lg:flex flex-col w-64 shrink-0 border-r border-slate-200">
+      <aside id="sidebar-desktop" className="hidden w-72 shrink-0 flex-col border-r border-slate-200 lg:flex">
         <SidebarContent />
       </aside>
 
@@ -174,13 +210,59 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {isMoreOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMoreOpen(false)}
+              className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm lg:hidden"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+              className="fixed inset-x-0 bottom-0 z-50 max-h-[78dvh] overflow-y-auto rounded-t-[2rem] border border-slate-200 bg-white p-4 shadow-2xl lg:hidden"
+            >
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200" />
+              <div className="mb-4 px-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('More Modules')}</p>
+                <h2 className="text-xl font-black uppercase italic tracking-tight text-slate-900">{t('Workshop Menu')}</h2>
+              </div>
+              <div className="grid gap-2">
+                {moreItems.map((item) => {
+                  const Icon = getNavIcon(item);
+                  const active = isRouteActive(location.pathname, item.to);
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setIsMoreOpen(false)}
+                      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-black ${
+                        active ? 'border-indigo-100 bg-indigo-50 text-indigo-600' : 'border-slate-100 bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <Icon size={18} />
+                      {t(item.labelKey)}
+                    </Link>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
       <div id="main-content-wrapper" className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header id="main-header" className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0 z-30 sticky top-0">
+        <header id="main-header" className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur-md lg:h-20 lg:px-8">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 lg:hidden"
             >
               <Menu size={24} />
             </button>
@@ -188,7 +270,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
               <BrandLogo markClassName="h-8 w-8 rounded-xl" textClassName="text-base italic" />
             </Link>
             <div className="hidden lg:flex items-center gap-2 text-slate-400">
-               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80">{location.pathname.split('/').slice(-1)[0] || 'Dashboard'}</span>
+               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80">{t(currentItem?.labelKey || 'Dashboard')}</span>
             </div>
           </div>
           
@@ -232,6 +314,35 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        <nav className="fixed inset-x-3 bottom-3 z-30 rounded-[1.5rem] border border-slate-200 bg-white/95 p-2 shadow-2xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
+          <div className="grid grid-cols-6 gap-1">
+            {mobilePrimaryItems.map((item) => {
+              const Icon = getNavIcon(item);
+              const active = isRouteActive(location.pathname, item.to);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[9px] font-black uppercase tracking-tight transition-all ${
+                    active ? 'bg-slate-950 text-white' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="max-w-full truncate">{t(item.labelKey)}</span>
+                </Link>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setIsMoreOpen(true)}
+              className="flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[9px] font-black uppercase tracking-tight text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-700"
+            >
+              <MoreHorizontal size={18} />
+              <span>{t('More')}</span>
+            </button>
+          </div>
+        </nav>
       </div>
     </div>
   );
@@ -286,13 +397,19 @@ const Login = () => {
 function AppContent() {
   const { user, profile, loading, isAdmin } = useUser();
   const location = useLocation();
+  const { i18n } = useTranslation();
   const role = profile?.role;
   const landingPath = getRoleLandingPath(role);
   const state = location.state as { from?: string } | null;
   const requestedPath = state?.from;
   const postLoginPath = role === 'client' && requestedPath?.startsWith('/client') ? requestedPath : landingPath;
 
-  if (loading) return (
+  useEffect(() => {
+    document.documentElement.dir = i18n.language === 'ur' ? 'rtl' : 'ltr';
+    document.documentElement.lang = i18n.language;
+  }, [i18n.language]);
+
+  if (loading && !canRenderBeforeAuthReady(location.pathname)) return (
     <div className="h-[100dvh] flex items-center justify-center bg-slate-50">
       <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
         <Scissors size={48} className="text-indigo-600" />
@@ -332,6 +449,7 @@ function AppContent() {
             <Routes>
               <Route index element={<Dashboard />} />
               <Route path="orders" element={<Orders />} />
+              <Route path="quotes" element={<QuoteRequests />} />
               <Route path="clients" element={<Clients />} />
               <Route path="appointments" element={<Appointments />} />
               <Route path="inventory" element={<Inventory />} />

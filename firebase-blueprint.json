@@ -258,6 +258,8 @@
         "measurementSource": { "type": "string", "enum": ["existing", "book-measurement", "enter-later"] },
         "inspirationNotes": { "type": "string" },
         "status": { "type": "string", "enum": ["submitted", "reviewed", "converted", "rejected"] },
+        "reviewedBy": { "type": "string" },
+        "reviewNotes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, updateDoc, doc, addDoc, increment } from 'firebase/firestore';
+import { collection, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee, Task, Account, UserProfile, PayrollRecord } from '../types';
 import { UserCircle, Phone, Calendar, DollarSign, Plus, Scissors, CheckCircle2, Clock, AlertCircle, Zap, MapPin, Edit2, Shield, Lock, Unlock, Search } from 'lucide-react';
@@ -7,9 +7,12 @@ import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import EmployeeModal from '../components/EmployeeModal';
 import PayrollModal from '../components/PayrollModal';
+import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { useUser } from '../contexts/UserContext';
 
 export default function Employees() {
   const { t } = useTranslation();
+  const { profile } = useUser();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -51,13 +54,17 @@ export default function Employees() {
 
   const handleBulkPayroll = async () => {
     if (processingPayroll) return;
+    if (!profile?.permissions?.canApprovePayroll) {
+      toast.error('You do not have permission to process payroll.');
+      return;
+    }
     if (!confirm(`Are you sure you want to process monthly payroll for ${employees.length} employees?`)) return;
     
     setProcessingPayroll(true);
     const tid = toast.loading('Calculating and distributing remuneration...');
     try {
-      const expenseAcc = accounts.find(a => a.type === 'expense');
-      const assetAcc = accounts.find(a => a.type === 'asset' && a.name.toLowerCase().includes('cash'));
+      const expenseAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.payroll], ['payroll', 'salary'], 'Payroll Expense');
+      const assetAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
       
       if (!expenseAcc || !assetAcc) {
         toast.error('Financial accounts (Cash/Expense) not fully configured for payroll.');
@@ -66,25 +73,21 @@ export default function Employees() {
 
       const today = new Date().toISOString().split('T')[0];
       const monthYear = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+      const batch = writeBatch(db);
 
       for (const emp of employees) {
-        // Create Transaction
-        await addDoc(collection(db, 'transactions'), {
+        const payrollRef = doc(collection(db, 'payrollRecords'));
+        const txnRef = appendLedgerEntryToBatch(db, batch, accounts, {
           date: today,
           description: `Salary: ${emp.name} (${monthYear})`,
           amount: emp.salary,
           debitAccountId: expenseAcc.id,
           creditAccountId: assetAcc.id,
-          type: 'payroll',
-          reference: emp.id
+          reference: payrollRef.id,
+          type: 'payroll'
         });
-
-        // Update Account Balances
-        await updateDoc(doc(db, 'accounts', expenseAcc.id), { balance: increment(emp.salary) });
-        await updateDoc(doc(db, 'accounts', assetAcc.id), { balance: increment(-emp.salary) });
         
-        // Create Payroll Record
-        await addDoc(collection(db, 'payrollRecords'), {
+        batch.set(payrollRef, {
           employeeId: emp.id,
           employeeName: emp.name,
           month: monthYear,
@@ -94,10 +97,14 @@ export default function Employees() {
           netSalary: emp.salary,
           status: 'paid',
           payoutDate: today,
+          transactionId: txnRef.id,
+          approvedBy: profile?.uid,
+          approvedAt: new Date().toISOString(),
           createdAt: new Date().toISOString()
         });
       }
 
+      await batch.commit();
       toast.success(`Payroll processed for ${employees.length} employees totaling Rs. ${employees.reduce((acc, e) => acc + e.salary, 0).toLocaleString()}`, { id: tid });
       fetchData();
     } catch (e) {
