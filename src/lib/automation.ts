@@ -1,7 +1,8 @@
-import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, increment, query, runTransaction, where } from 'firebase/firestore';
 import { db } from './firebase';
-import { Account, RecurringTransaction, TransactionFrequency } from '../types';
-import { appendLedgerEntryToBatch } from './ledger';
+import { Account, RecurringTransaction } from '../types';
+import { getCreditBalanceDelta, getDebitBalanceDelta } from './ledger';
+import { buildRecurringLedgerEntry, calculateNextDueDate } from './recurringTransactions';
 
 export async function processRecurringTransactions() {
   const now = new Date();
@@ -19,56 +20,61 @@ export async function processRecurringTransactions() {
 
     const accountSnap = await getDocs(collection(db, 'accounts'));
     const accounts = accountSnap.docs.map(d => ({ id: d.id, ...d.data() } as Account));
-    const batch = writeBatch(db);
     let processedCount = 0;
+    let skippedCount = 0;
 
     for (const d of snap.docs) {
       const rec = { id: d.id, ...d.data() } as RecurringTransaction;
-      
-      appendLedgerEntryToBatch(db, batch, accounts, {
-        date: todayStr,
-        description: `Auto-generated: ${rec.description}`,
-        amount: rec.amount,
-        debitAccountId: rec.debitAccountId,
-        creditAccountId: rec.creditAccountId,
-        reference: rec.id,
-        type: rec.type === 'revenue' ? 'sale' : 'expense',
-        metadata: { recurringTransactionId: rec.id, category: rec.category }
+
+      const wasProcessed = await runTransaction(db, async (transaction) => {
+        const recurringRef = doc(db, 'recurringTransactions', rec.id);
+        const recurringSnap = await transaction.get(recurringRef);
+        if (!recurringSnap.exists()) return false;
+
+        const current = { id: recurringSnap.id, ...recurringSnap.data() } as RecurringTransaction;
+        if (current.status !== 'active' || current.nextDueDate > todayStr) return false;
+
+        const ledgerEntry = buildRecurringLedgerEntry(current, todayStr);
+        const transactionId = String(ledgerEntry.metadata?.idempotencyKey);
+        const transactionRef = doc(db, 'transactions', transactionId);
+        const transactionSnap = await transaction.get(transactionRef);
+        if (transactionSnap.exists()) return false;
+
+        const debitAccount = accounts.find(account => account.id === ledgerEntry.debitAccountId);
+        const creditAccount = accounts.find(account => account.id === ledgerEntry.creditAccountId);
+        if (!debitAccount) throw new Error(`Debit account not found: ${ledgerEntry.debitAccountId}`);
+        if (!creditAccount) throw new Error(`Credit account not found: ${ledgerEntry.creditAccountId}`);
+
+        transaction.set(transactionRef, {
+          ...ledgerEntry,
+          createdAt: new Date().toISOString(),
+        });
+        transaction.update(doc(db, 'accounts', debitAccount.id), {
+          balance: increment(getDebitBalanceDelta(debitAccount.type, ledgerEntry.amount)),
+        });
+        transaction.update(doc(db, 'accounts', creditAccount.id), {
+          balance: increment(getCreditBalanceDelta(creditAccount.type, ledgerEntry.amount)),
+        });
+
+        const nextDate = calculateNextDueDate(new Date(current.nextDueDate), current.frequency);
+        transaction.update(recurringRef, {
+          lastProcessed: todayStr,
+          nextDueDate: nextDate.toISOString().split('T')[0]
+        });
+
+        return true;
       });
 
-      const nextDate = calculateNextDueDate(new Date(rec.nextDueDate), rec.frequency);
-      
-      batch.update(doc(db, 'recurringTransactions', rec.id), {
-        lastProcessed: todayStr,
-        nextDueDate: nextDate.toISOString().split('T')[0]
-      });
-
-      processedCount++;
+      if (wasProcessed) {
+        processedCount++;
+      } else {
+        skippedCount++;
+      }
     }
 
-    await batch.commit();
-    return { processed: processedCount };
+    return { processed: processedCount, skipped: skippedCount };
   } catch (error) {
     console.error('Automation error:', error);
     return { error };
   }
-}
-
-function calculateNextDueDate(current: Date, frequency: TransactionFrequency): Date {
-  const next = new Date(current);
-  switch (frequency) {
-    case 'daily':
-      next.setDate(next.getDate() + 1);
-      break;
-    case 'weekly':
-      next.setDate(next.getDate() + 7);
-      break;
-    case 'monthly':
-      next.setMonth(next.getMonth() + 1);
-      break;
-    case 'yearly':
-      next.setFullYear(next.getFullYear() + 1);
-      break;
-  }
-  return next;
 }
