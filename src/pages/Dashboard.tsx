@@ -23,7 +23,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { processRecurringTransactions } from '../lib/automation';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { exportToCSV } from '../lib/exportUtils';
 import { seedDatabase } from '../lib/seeder';
 import { PageHeader, PageShell } from '../components/layout/AppLayout';
 
@@ -274,7 +273,7 @@ export default function Dashboard() {
            </button>
            <button 
              id="btn-export-summary"
-             onClick={() => {
+             onClick={async () => {
                const data = [
                  { Metric: 'Active Orders', Value: stats.activeOrders },
                  { Metric: 'Total Clients', Value: stats.totalClients },
@@ -282,6 +281,7 @@ export default function Dashboard() {
                  { Metric: 'Monthly Payroll', Value: stats.monthlyPayroll },
                  { Metric: 'Outstanding Receivables', Value: stats.receivables }
                ];
+               const { exportToCSV } = await import('../lib/exportUtils');
                exportToCSV(data, `operations_summary_${new Date().toISOString().split('T')[0]}`);
              }}
              className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2"

@@ -18,7 +18,7 @@ import {
   FileText,
   MoreHorizontal
 } from 'lucide-react';
-import React from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { auth } from './lib/firebase';
 import { signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { UserProvider, useUser } from './contexts/UserContext';
@@ -27,26 +27,25 @@ import LanguageToggle from './components/LanguageToggle';
 import BrandLogo from './components/BrandLogo';
 import { toast, Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useEffect } from 'react';
-
-// Pages
-import Home from './pages/Home';
-import Dashboard from './pages/Dashboard';
-import Clients from './pages/Clients';
-import Orders from './pages/Orders';
-import Inventory from './pages/Inventory';
-import Vendors from './pages/Vendors';
-import Accounting from './pages/Accounting';
-import Employees from './pages/Employees';
-import Profile from './pages/Profile';
-import Appointments from './pages/Appointments';
-import Branches from './pages/Branches';
-import ClientDashboard from './pages/ClientDashboard';
-import RequestQuote from './pages/RequestQuote';
-import QuoteRequests from './pages/QuoteRequests';
 import { canAccessAdminRoutes, canAccessClientRoutes, getRoleLandingPath } from './lib/roleRouting';
 import { canRenderBeforeAuthReady } from './lib/publicRoutes';
 import { adminNavItems, getAdminNavGroups, getPrimaryMobileAdminNavItems, type AdminNavItemConfig } from './lib/adminNavigation';
+import { adminPageLoaders, publicPageLoaders } from './lib/routeModules';
+
+const Home = React.lazy(publicPageLoaders.home);
+const ClientDashboard = React.lazy(publicPageLoaders.clientDashboard);
+const RequestQuote = React.lazy(publicPageLoaders.requestQuote);
+const Dashboard = React.lazy(adminPageLoaders.dashboard);
+const Clients = React.lazy(adminPageLoaders.clients);
+const Orders = React.lazy(adminPageLoaders.orders);
+const Inventory = React.lazy(adminPageLoaders.inventory);
+const Vendors = React.lazy(adminPageLoaders.vendors);
+const Accounting = React.lazy(adminPageLoaders.accounting);
+const Employees = React.lazy(adminPageLoaders.employees);
+const Profile = React.lazy(adminPageLoaders.profile);
+const Appointments = React.lazy(adminPageLoaders.appointments);
+const Branches = React.lazy(adminPageLoaders.branches);
+const QuoteRequests = React.lazy(adminPageLoaders.quoteRequests);
 
 const navIcons: Record<string, React.ElementType> = {
   '/admin': LayoutDashboard,
@@ -66,6 +65,14 @@ const getNavIcon = (item: Pick<AdminNavItemConfig, 'to'>) => navIcons[item.to] |
 
 const isRouteActive = (pathname: string, to: string) => (
   to === '/admin' ? pathname === '/admin' : pathname === to || pathname.startsWith(`${to}/`)
+);
+
+const RouteFallback = () => (
+  <div className="flex min-h-[50dvh] items-center justify-center bg-slate-50">
+    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+      <Scissors size={40} className="text-indigo-600" />
+    </motion.div>
+  </div>
 );
 
 const SidebarItem = ({ to, icon: Icon, label, active }: { to: string, icon: React.ElementType, label: string, active: boolean }) => (
@@ -418,7 +425,8 @@ function AppContent() {
   );
 
   return (
-    <Routes>
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={!user ? <Login /> : <Navigate to={postLoginPath} />} />
 
@@ -446,23 +454,25 @@ function AppContent() {
       <Route path="/admin/*" element={
         user && canAccessAdminRoutes(role) ? (
           <AdminLayout>
-            <Routes>
-              <Route index element={<Dashboard />} />
-              <Route path="orders" element={<Orders />} />
-              <Route path="quotes" element={<QuoteRequests />} />
-              <Route path="clients" element={<Clients />} />
-              <Route path="appointments" element={<Appointments />} />
-              <Route path="inventory" element={<Inventory />} />
-              
-              {/* Restricted Admin only routes */}
-              <Route path="vendors" element={isAdmin ? <Vendors /> : <Navigate to="/admin" />} />
-              <Route path="accounting" element={isAdmin ? <Accounting /> : <Navigate to="/admin" />} />
-              <Route path="employees" element={isAdmin ? <Employees /> : <Navigate to="/admin" />} />
-              <Route path="branches" element={isAdmin ? <Branches /> : <Navigate to="/admin" />} />
-              <Route path="profile" element={<Profile />} />
-              
-              <Route path="*" element={<Navigate to="/admin" replace />} />
-            </Routes>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route index element={<Dashboard />} />
+                <Route path="orders" element={<Orders />} />
+                <Route path="quotes" element={<QuoteRequests />} />
+                <Route path="clients" element={<Clients />} />
+                <Route path="appointments" element={<Appointments />} />
+                <Route path="inventory" element={<Inventory />} />
+
+                {/* Restricted Admin only routes */}
+                <Route path="vendors" element={isAdmin ? <Vendors /> : <Navigate to="/admin" />} />
+                <Route path="accounting" element={isAdmin ? <Accounting /> : <Navigate to="/admin" />} />
+                <Route path="employees" element={isAdmin ? <Employees /> : <Navigate to="/admin" />} />
+                <Route path="branches" element={isAdmin ? <Branches /> : <Navigate to="/admin" />} />
+                <Route path="profile" element={<Profile />} />
+
+                <Route path="*" element={<Navigate to="/admin" replace />} />
+              </Routes>
+            </Suspense>
           </AdminLayout>
         ) : user ? (
           <Navigate to="/" />
@@ -472,7 +482,8 @@ function AppContent() {
       } />
       
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 
