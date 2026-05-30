@@ -8,6 +8,7 @@ import { useUser } from '../contexts/UserContext';
 import { calculateOrderTotal } from '../lib/orderFinance';
 import { createNotification } from '../lib/notifications';
 import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { buildPublicOrderTracking } from '../lib/publicOrderTracking';
 
 interface Props {
   onClose: () => void;
@@ -108,6 +109,7 @@ export default function NewOrderForm({ onClose, onSuccess }: Props) {
       const orderRef = doc(collection(db, 'orders'));
       const orderId = orderRef.id;
       batch.set(orderRef, orderData);
+      batch.set(doc(db, 'publicOrderTracking', orderId), buildPublicOrderTracking({ id: orderId, ...orderData }));
 
       // Create initial tasks for the employee if one is assigned
       if (formData.assignedTo) {

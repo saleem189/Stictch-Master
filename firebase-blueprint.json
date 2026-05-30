@@ -265,6 +265,29 @@
       },
       "required": ["clientId", "garmentType", "styleNotes", "preferredDueDate", "budgetRange", "measurementSource", "status"]
     },
+    "PublicOrderTracking": {
+      "title": "Public Order Tracking",
+      "description": "Sanitized public tracking document for unauthenticated order lookup",
+      "type": "object",
+      "properties": {
+        "trackingCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "ready", "delivered", "cancelled"] },
+        "dueDate": { "type": "string", "format": "date" },
+        "itemCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "steps": {
+          "type": "object",
+          "properties": {
+            "registered": { "type": "boolean" },
+            "cutting": { "type": "boolean" },
+            "stitching": { "type": "boolean" },
+            "finishing": { "type": "boolean" },
+            "ready": { "type": "boolean" }
+          }
+        }
+      },
+      "required": ["trackingCode", "status", "dueDate", "itemCount", "updatedAt", "steps"]
+    },
     "Notification": {
       "title": "Notification",
       "description": "System alerts and notifications",
@@ -332,6 +355,7 @@
     "/users/{uid}": { "schema": "UserProfile", "description": "User roles and permissions" },
     "/profileRequests/{requestId}": { "schema": "ProfileRequest", "description": "Employee profile change requests" },
     "/quoteRequests/{requestId}": { "schema": "QuoteRequest", "description": "Client bespoke quote inquiries" },
+    "/publicOrderTracking/{trackingCode}": { "schema": "PublicOrderTracking", "description": "Sanitized public order tracking records" },
     "/notifications/{notifId}": { "schema": "Notification", "description": "System alerts" },
     "/recurringTransactions/{txnId}": { "schema": "RecurringTransaction", "description": "Automated ledger entries" },
     "/households/{householdId}": { "schema": "Household", "description": "Group of clients" },

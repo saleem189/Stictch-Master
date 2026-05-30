@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee, PayrollRecord, Account } from '../types';
 import { X, Zap, ShieldCheck, AlertCircle, Plus } from 'lucide-react';
@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
 import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { getPayrollRecordId, isPayrollAlreadyPaid } from '../lib/payroll';
 
 interface Props {
   isOpen: boolean;
@@ -74,9 +75,19 @@ export default function PayrollModal({ isOpen, onClose, onSuccess, employees }: 
       }
 
       const batch = writeBatch(db);
+      let processedCount = 0;
+      let skippedCount = 0;
 
       for (const record of records) {
-        const payrollRef = doc(collection(db, 'payrollRecords'));
+        if (!record.employeeId || !record.month) continue;
+
+        const payrollRef = doc(db, 'payrollRecords', getPayrollRecordId(record.employeeId, record.month));
+        const existingPayroll = await getDoc(payrollRef);
+        if (isPayrollAlreadyPaid(existingPayroll.exists() ? existingPayroll.data() as PayrollRecord : null)) {
+          skippedCount += 1;
+          continue;
+        }
+
         const txnRef = appendLedgerEntryToBatch(db, batch, accounts, {
           date: new Date().toISOString().split('T')[0],
           description: `Payroll Payout: ${record.employeeName} (${record.month})`,
@@ -105,10 +116,16 @@ export default function PayrollModal({ isOpen, onClose, onSuccess, employees }: 
           afterState: record,
           timestamp: new Date().toISOString()
         });
+        processedCount += 1;
+      }
+
+      if (processedCount === 0) {
+        toast.success('Payroll is already processed for the selected month.');
+        return;
       }
 
       await batch.commit();
-      toast.success('Payroll processed successfully.');
+      toast.success(`Payroll processed for ${processedCount} employees${skippedCount ? `; skipped ${skippedCount} already paid.` : ''}.`);
       onSuccess();
       onClose();
     } catch (e) {

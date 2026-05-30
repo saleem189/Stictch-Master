@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { collection, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { AuditTrailEntry, Order, OrderItem, OrderStatus, OrderWorkflowStatus, Account } from '../types';
 import { X, Save, Clock, User, CheckCircle2, Scissors, Edit3, Truck, Archive, Info, Ruler, DollarSign } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
 import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { buildPublicOrderTracking } from '../lib/publicOrderTracking';
 
 interface Props {
   order: Order;
@@ -63,6 +64,11 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
         paidAmount: newPaidAmount,
         auditTrail: [...(order.auditTrail || []), auditEntry]
       });
+      batch.set(doc(db, 'publicOrderTracking', order.id), buildPublicOrderTracking({
+        ...order,
+        paidAmount: newPaidAmount,
+        auditTrail: [...(order.auditTrail || []), auditEntry],
+      }));
 
       const documentRef = doc(collection(db, 'financialDocuments'));
       batch.set(documentRef, {
@@ -116,12 +122,22 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
         details: 'Updated order workflow and item statuses'
       };
 
-      await updateDoc(orderRef, {
-        items: items,
+      const updatedOrder = {
+        ...order,
+        items,
         status: globalStatus,
         updatedAt: new Date().toISOString(),
-        auditTrail: [...(order.auditTrail || []), auditEntry]
+        auditTrail: [...(order.auditTrail || []), auditEntry],
+      };
+      const batch = writeBatch(db);
+      batch.update(orderRef, {
+        items: items,
+        status: globalStatus,
+        updatedAt: updatedOrder.updatedAt,
+        auditTrail: updatedOrder.auditTrail
       });
+      batch.set(doc(db, 'publicOrderTracking', order.id), buildPublicOrderTracking(updatedOrder));
+      await batch.commit();
       onSuccess();
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'orders');

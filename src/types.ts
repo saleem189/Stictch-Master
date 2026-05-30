@@ -108,6 +108,21 @@ export interface Order {
   auditTrail: AuditTrailEntry[];
 }
 
+export interface PublicOrderTracking {
+  trackingCode: string;
+  status: OrderStatus;
+  dueDate: string;
+  itemCount: number;
+  updatedAt: string;
+  steps: {
+    registered: boolean;
+    cutting: boolean;
+    stitching: boolean;
+    finishing: boolean;
+    ready: boolean;
+  };
+}
+
 export interface Task {
   id: string;
   orderId: string;

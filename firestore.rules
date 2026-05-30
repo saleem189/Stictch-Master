@@ -108,6 +108,27 @@ service cloud.firestore {
       );
     }
 
+    // Sanitized public tracking records. These documents intentionally exclude
+    // client names, phone numbers, measurements, prices, payments, and item notes.
+    function isValidPublicOrderTracking(data, trackingCode) {
+      return data.trackingCode == trackingCode &&
+             data.status in ['pending', 'in-progress', 'ready', 'delivered', 'cancelled'] &&
+             data.dueDate is string &&
+             data.itemCount is number && data.itemCount >= 0 && data.itemCount <= 100 &&
+             data.updatedAt is string &&
+             data.steps is map &&
+             data.steps.registered is bool &&
+             data.steps.cutting is bool &&
+             data.steps.stitching is bool &&
+             data.steps.finishing is bool &&
+             data.steps.ready is bool;
+    }
+    match /publicOrderTracking/{trackingCode} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isEmployee() && isValidPublicOrderTracking(incoming(), trackingCode);
+    }
+
     // Inventory & Fabric Roll Rules
     function isValidFabricRoll(data) {
       return data.inventoryId is string && data.originalLength is number && 

@@ -6,6 +6,7 @@ import { X, DollarSign, CreditCard } from 'lucide-react';
 import { motion } from 'motion/react';
 import { calculateRemainingBalance, getStatusAfterPayment } from '../lib/orderFinance';
 import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { buildPublicOrderTracking } from '../lib/publicOrderTracking';
 
 interface Props {
   order: Order;
@@ -29,11 +30,17 @@ export default function PaymentModal({ order, onClose, onSuccess }: Props) {
       const cashAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.cash, ACCOUNT_IDS.bank], ['cash', 'bank'], 'Cash or Bank');
       const receivableAcc = getRequiredAccountByIdOrName(accounts, [ACCOUNT_IDS.receivable], ['receivable'], 'Accounts Receivable');
       const batch = writeBatch(db);
+      const nextStatus = getStatusAfterPayment(order, amount);
 
       batch.update(doc(db, 'orders', order.id), {
         paidAmount: increment(amount),
-        status: getStatusAfterPayment(order, amount)
+        status: nextStatus
       });
+      batch.set(doc(db, 'publicOrderTracking', order.id), buildPublicOrderTracking({
+        ...order,
+        paidAmount: order.paidAmount + amount,
+        status: nextStatus,
+      }));
 
       batch.set(doc(collection(db, 'payments')), {
         date: new Date().toISOString(),

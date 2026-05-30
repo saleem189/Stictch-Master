@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ruler, CheckCircle2, Search, ArrowRight, Star, Clock, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Order } from '../types';
+import { PublicOrderTracking } from '../types';
 import { useTranslation } from 'react-i18next';
 import BrandLogo from '../components/BrandLogo';
+import { normalizePublicOrderTracking } from '../lib/publicOrderTracking';
 
 export default function Home() {
   const { t } = useTranslation();
   const [orderQuery, setOrderQuery] = useState('');
-  const [orderStatus, setOrderStatus] = useState<Order | null>(null);
+  const [orderStatus, setOrderStatus] = useState<PublicOrderTracking | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
   const [heroImageLoaded, setHeroImageLoaded] = useState(false);
@@ -25,13 +26,13 @@ export default function Home() {
     setOrderStatus(null);
     
     try {
-      const q = query(collection(db, 'orders'), where('__name__', '==', orderQuery));
-      const snap = await getDocs(q);
+      const trackingCode = orderQuery.trim();
+      const snap = await getDoc(doc(db, 'publicOrderTracking', trackingCode));
       
-      if (!snap.empty) {
-        setOrderStatus({ id: snap.docs[0].id, ...snap.docs[0].data() } as Order);
+      if (snap.exists()) {
+        setOrderStatus(normalizePublicOrderTracking(snap.id, snap.data()));
       } else {
-        setError('Order not found. Please check your Order ID.');
+        setError('Tracking record not found. Please check your tracking code.');
       }
     } catch (err) {
       console.error(err);
@@ -216,8 +217,8 @@ export default function Home() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 sm:border-b border-slate-100 sm:pb-10">
                  <div>
-                    <h3 className="text-3xl sm:text-5xl font-black tracking-tight">{orderStatus.clientName}</h3>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mt-3">Registry ID: {orderStatus.id}</p>
+                    <h3 className="text-3xl sm:text-5xl font-black tracking-tight">Bespoke Order</h3>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mt-3">Tracking ID: {orderStatus.trackingCode}</p>
                  </div>
                  <div className={`self-start sm:self-center px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border-2 ${
                    orderStatus.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-100' : 
@@ -231,19 +232,19 @@ export default function Home() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
                  <div className="space-y-2">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Composition</p>
-                    <p className="font-black text-slate-900 text-lg">{orderStatus.items.length} Units</p>
+                    <p className="font-black text-slate-900 text-lg">{orderStatus.itemCount} Units</p>
                  </div>
                  <div className="space-y-2">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Date</p>
-                    <p className="font-black text-slate-900 text-lg">{new Date(orderStatus.dueDate).toLocaleDateString()}</p>
+                    <p className="font-black text-slate-900 text-lg">{orderStatus.dueDate ? new Date(orderStatus.dueDate).toLocaleDateString() : 'Pending'}</p>
                  </div>
                  <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valuation</p>
-                    <p className="font-black text-slate-900 text-lg">Rs. {orderStatus.totalAmount.toLocaleString()}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Sync</p>
+                    <p className="font-black text-slate-900 text-lg">{orderStatus.updatedAt ? new Date(orderStatus.updatedAt).toLocaleDateString() : 'Pending'}</p>
                  </div>
                  <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Settlement</p>
-                    <p className="font-black text-green-600 text-lg">Rs. {orderStatus.paidAmount.toLocaleString()}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Privacy</p>
+                    <p className="font-black text-green-600 text-lg">Sanitized</p>
                  </div>
               </div>
 
@@ -252,10 +253,10 @@ export default function Home() {
                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-2">
                     {[
                       { key: 'pending', label: 'Registered', color: 'bg-indigo-600 shadow-lg shadow-indigo-200' },
-                      { key: 'cutting', label: 'Precision Cutting', color: orderStatus.taskStatus?.cutting === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'stitching', label: 'Structural Stitching', color: orderStatus.taskStatus?.stitching === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'finishing', label: 'Final Articulation', color: orderStatus.taskStatus?.finishing === 'completed' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'ready', label: 'Ready for Fitting', color: orderStatus.status === 'ready' || orderStatus.status === 'delivered' ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' }
+                      { key: 'cutting', label: 'Precision Cutting', color: orderStatus.steps.cutting ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
+                      { key: 'stitching', label: 'Structural Stitching', color: orderStatus.steps.stitching ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
+                      { key: 'finishing', label: 'Final Articulation', color: orderStatus.steps.finishing ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
+                      { key: 'ready', label: 'Ready for Fitting', color: orderStatus.steps.ready ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' }
                     ].map((step, i) => (
                       <div key={i} className="flex-1 space-y-3">
                         <div className={`h-3 rounded-full ${step.color} transition-all duration-1000`}></div>

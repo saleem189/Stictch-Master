@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Employee, Task, Account, UserProfile, PayrollRecord } from '../types';
+import { Employee, Task, Account, UserProfile, PayrollRecord, Order } from '../types';
 import { UserCircle, Phone, Calendar, DollarSign, Plus, Scissors, CheckCircle2, Clock, AlertCircle, Zap, MapPin, Edit2, Shield, Lock, Unlock, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,8 @@ import EmployeeModal from '../components/EmployeeModal';
 import PayrollModal from '../components/PayrollModal';
 import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
 import { useUser } from '../contexts/UserContext';
+import { buildPublicOrderTracking } from '../lib/publicOrderTracking';
+import { getPayrollRecordId, isPayrollAlreadyPaid } from '../lib/payroll';
 
 export default function Employees() {
   const { t } = useTranslation();
@@ -72,14 +74,23 @@ export default function Employees() {
       }
 
       const today = new Date().toISOString().split('T')[0];
-      const monthYear = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+      const payrollMonth = new Date().toISOString().slice(0, 7);
       const batch = writeBatch(db);
+      let processedCount = 0;
+      let skippedCount = 0;
+      let processedTotal = 0;
 
       for (const emp of employees) {
-        const payrollRef = doc(collection(db, 'payrollRecords'));
+        const payrollRef = doc(db, 'payrollRecords', getPayrollRecordId(emp.id, payrollMonth));
+        const existingPayroll = await getDoc(payrollRef);
+        if (isPayrollAlreadyPaid(existingPayroll.exists() ? existingPayroll.data() as PayrollRecord : null)) {
+          skippedCount += 1;
+          continue;
+        }
+
         const txnRef = appendLedgerEntryToBatch(db, batch, accounts, {
           date: today,
-          description: `Salary: ${emp.name} (${monthYear})`,
+          description: `Salary: ${emp.name} (${payrollMonth})`,
           amount: emp.salary,
           debitAccountId: expenseAcc.id,
           creditAccountId: assetAcc.id,
@@ -90,7 +101,7 @@ export default function Employees() {
         batch.set(payrollRef, {
           employeeId: emp.id,
           employeeName: emp.name,
-          month: monthYear,
+          month: payrollMonth,
           baseSalary: emp.salary,
           bonuses: [],
           deductions: [],
@@ -102,10 +113,17 @@ export default function Employees() {
           approvedAt: new Date().toISOString(),
           createdAt: new Date().toISOString()
         });
+        processedCount += 1;
+        processedTotal += emp.salary;
+      }
+
+      if (processedCount === 0) {
+        toast.success(`Payroll for ${payrollMonth} is already processed for all employees.`, { id: tid });
+        return;
       }
 
       await batch.commit();
-      toast.success(`Payroll processed for ${employees.length} employees totaling Rs. ${employees.reduce((acc, e) => acc + e.salary, 0).toLocaleString()}`, { id: tid });
+      toast.success(`Payroll processed for ${processedCount} employees totaling Rs. ${processedTotal.toLocaleString()}${skippedCount ? `; skipped ${skippedCount} already paid.` : ''}`, { id: tid });
       fetchData();
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'payroll');
@@ -127,9 +145,21 @@ export default function Employees() {
       });
 
       // Update parent order taskStatus
+      const updatedTaskStatus = status;
       await updateDoc(doc(db, 'orders', task.orderId), {
         [`taskStatus.${task.type}`]: status
       });
+      const orderSnap = await getDoc(doc(db, 'orders', task.orderId));
+      if (orderSnap.exists()) {
+        const order = { id: orderSnap.id, ...orderSnap.data() } as Order;
+        await setDoc(doc(db, 'publicOrderTracking', task.orderId), buildPublicOrderTracking({
+          ...order,
+          taskStatus: {
+            ...(order.taskStatus || {}),
+            [task.type]: updatedTaskStatus,
+          },
+        }));
+      }
 
       fetchData();
     } catch (e) {
