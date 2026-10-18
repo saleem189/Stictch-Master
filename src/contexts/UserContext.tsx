@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, runTransaction } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -37,28 +37,60 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (u) => {
+    let requestVersion = 0;
+    let isMounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      const currentRequest = ++requestVersion;
       setUser(u);
-      if (u) {
-        const profileDoc = await getDoc(doc(db, 'users', u.uid));
-        if (profileDoc.exists()) {
-          setProfile(profileDoc.data() as UserProfile);
-        } else {
-          const newProfile: UserProfile = {
-            uid: u.uid,
-            email: u.email || '',
-            role: 'client',
-            permissions: defaultClientPermissions,
-            createdAt: new Date().toISOString()
-          };
-          await setDoc(doc(db, 'users', u.uid), newProfile);
-          setProfile(newProfile);
-        }
-      } else {
+      setLoading(true);
+
+      if (!u) {
         setProfile(null);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      void (async () => {
+        try {
+          const profileRef = doc(db, 'users', u.uid);
+          const cachedProfile = await getDoc(profileRef);
+          const resolvedProfile = cachedProfile.exists()
+            ? cachedProfile.data() as UserProfile
+            : await runTransaction(db, async transaction => {
+              const profileDoc = await transaction.get(profileRef);
+              if (profileDoc.exists()) return profileDoc.data() as UserProfile;
+
+              const newProfile: UserProfile = {
+                uid: u.uid,
+                email: u.email || '',
+                role: 'client',
+                permissions: defaultClientPermissions,
+                createdAt: new Date().toISOString(),
+              };
+              transaction.set(profileRef, newProfile);
+              return newProfile;
+            });
+
+          if (isMounted && currentRequest === requestVersion) setProfile(resolvedProfile);
+        } catch (error) {
+          if (isMounted && currentRequest === requestVersion) {
+            setProfile(null);
+            console.error(
+              'Unable to load the signed-in user profile.',
+              error instanceof Error ? error.message : 'Unknown error'
+            );
+          }
+        } finally {
+          if (isMounted && currentRequest === requestVersion) setLoading(false);
+        }
+      })();
     });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const value = {

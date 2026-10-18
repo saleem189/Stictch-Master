@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee, Task, Account, UserProfile, PayrollRecord, Order } from '../types';
 import { UserCircle, Phone, Calendar, DollarSign, Plus, Scissors, CheckCircle2, Clock, AlertCircle, Zap, MapPin, Edit2, Shield, Lock, Unlock, Search } from 'lucide-react';
@@ -7,10 +7,10 @@ import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import EmployeeModal from '../components/EmployeeModal';
 import PayrollModal from '../components/PayrollModal';
-import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { ACCOUNT_IDS, getRequiredAccountByIdOrName } from '../lib/ledger';
 import { useUser } from '../contexts/UserContext';
 import { buildPublicOrderTracking } from '../lib/publicOrderTracking';
-import { getPayrollRecordId, isPayrollAlreadyPaid } from '../lib/payroll';
+import { processPayrollPayout } from '../lib/payrollProcessor';
 
 export default function Employees() {
   const { t } = useTranslation();
@@ -73,46 +73,35 @@ export default function Employees() {
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
-      const payrollMonth = new Date().toISOString().slice(0, 7);
-      const batch = writeBatch(db);
+      const now = new Date();
+      const payrollMonth = now.toISOString().slice(0, 7);
       let processedCount = 0;
       let skippedCount = 0;
       let processedTotal = 0;
 
       for (const emp of employees) {
-        const payrollRef = doc(db, 'payrollRecords', getPayrollRecordId(emp.id, payrollMonth));
-        const existingPayroll = await getDoc(payrollRef);
-        if (isPayrollAlreadyPaid(existingPayroll.exists() ? existingPayroll.data() as PayrollRecord : null)) {
+        const processed = await processPayrollPayout({
+          db,
+          payout: {
+            employeeId: emp.id,
+            employeeName: emp.name,
+            month: payrollMonth,
+            baseSalary: emp.salary,
+            bonuses: [],
+            deductions: [],
+            netSalary: emp.salary,
+          },
+          debitAccount: expenseAcc,
+          creditAccount: assetAcc,
+          actorId: profile.uid,
+          actorName: profile.name || profile.email,
+          now,
+        });
+
+        if (!processed) {
           skippedCount += 1;
           continue;
         }
-
-        const txnRef = appendLedgerEntryToBatch(db, batch, accounts, {
-          date: today,
-          description: `Salary: ${emp.name} (${payrollMonth})`,
-          amount: emp.salary,
-          debitAccountId: expenseAcc.id,
-          creditAccountId: assetAcc.id,
-          reference: payrollRef.id,
-          type: 'payroll'
-        });
-        
-        batch.set(payrollRef, {
-          employeeId: emp.id,
-          employeeName: emp.name,
-          month: payrollMonth,
-          baseSalary: emp.salary,
-          bonuses: [],
-          deductions: [],
-          netSalary: emp.salary,
-          status: 'paid',
-          payoutDate: today,
-          transactionId: txnRef.id,
-          approvedBy: profile?.uid,
-          approvedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        });
         processedCount += 1;
         processedTotal += emp.salary;
       }
@@ -122,9 +111,8 @@ export default function Employees() {
         return;
       }
 
-      await batch.commit();
       toast.success(`Payroll processed for ${processedCount} employees totaling Rs. ${processedTotal.toLocaleString()}${skippedCount ? `; skipped ${skippedCount} already paid.` : ''}`, { id: tid });
-      fetchData();
+      void fetchData();
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'payroll');
       toast.error('Financial sync failed during payroll.', { id: tid });

@@ -1,12 +1,21 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import configuredFirebaseConfig from '../../firebase-applet-config.json';
 import { enableOfflinePersistence } from './offlinePersistence';
 
+const firebaseConfig = import.meta.env.VITE_FIREBASE_PROJECT_ID
+  ? { ...configuredFirebaseConfig, projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID }
+  : configuredFirebaseConfig;
+const useFirebaseEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, useFirebaseEmulator ? '(default)' : firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth();
+
+if (useFirebaseEmulator) {
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+}
 
 void enableOfflinePersistence(db).then(result => {
   if (result.enabled === true) {
@@ -26,19 +35,6 @@ void enableOfflinePersistence(db).then(result => {
   }
 });
 
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, '_connection_test_', 'init'));
-    console.log('Firebase connected successfully');
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
-  }
-}
-
-testConnection();
-
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -52,33 +48,11 @@ export interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  }
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
     operationType,
     path
   }

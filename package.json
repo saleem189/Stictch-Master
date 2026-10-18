@@ -5,12 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:demo": "vite --mode demo --port=3001 --host=0.0.0.0",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-stitchmaster",
+    "demo:seed": "node --import tsx scripts/seed-demo.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "eslint . && tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-stitchmaster \"vitest run --config vitest.rules.config.ts\"",
+    "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-stitchmaster \"playwright test\"",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -33,12 +39,15 @@
   },
   "devDependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.64.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^10.3.0",
+    "firebase-tools": "^15.34.0",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

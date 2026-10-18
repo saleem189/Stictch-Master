@@ -71,6 +71,29 @@ Install dependencies:
 npm install
 ```
 
+### Local authentication and demo data
+
+The local demo uses Firebase's Auth and Firestore emulators with the demo project ID `demo-stitchmaster`. It does not create accounts or data in the production Firebase project.
+
+Start the emulator services in one terminal, seed the synthetic account/data set in another, then run the demo-mode Vite server:
+
+```bash
+npm run emulators
+npm run demo:seed
+npm run dev:demo
+```
+
+Open `http://localhost:3001/admin` to reach the admin sign-in flow. The sign-in page also shows the credentials when the demo mode is active. The seeded accounts are:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `demo.admin@tailoringerp.test` | `TailorDemo!2026` |
+| Client | `demo.client@tailoringerp.test` | `TailorClient!2026` |
+
+The dataset is synthetic and is generated from `src/lib/seedData.ts`. Emulator data is in memory by default; rerun `npm run demo:seed` after restarting the emulators.
+
+Newly registered email/password accounts receive the client role only. Admin and employee roles remain assigned by an administrator. For a real Firebase project, enable the Email/Password provider in Firebase Authentication before using this sign-in method. Never use the local demo credentials with a production project.
+
 Run the development server:
 
 ```bash
@@ -83,7 +106,17 @@ Run verification:
 npm test
 npm run lint
 npm run build
+npm run test:rules
+npm run test:e2e
 ```
+
+The Firestore rules suite and browser E2E suite use demo project `demo-stitchmaster` and local Firebase emulators. Java 21 or newer is required by the current Firestore emulator. Playwright's Chromium browser is installed with:
+
+```bash
+npx playwright install chromium
+```
+
+The browser tests start a local Vite server on port `4174`. For manual preview, run `npm run dev` and open `http://localhost:3000`.
 
 In this Codex Windows environment, Node may need to be invoked directly:
 

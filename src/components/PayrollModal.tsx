@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee, PayrollRecord, Account } from '../types';
 import { X, Zap, ShieldCheck, AlertCircle, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { toast } from 'react-hot-toast';
-import { ACCOUNT_IDS, appendLedgerEntryToBatch, getRequiredAccountByIdOrName } from '../lib/ledger';
-import { getPayrollRecordId, isPayrollAlreadyPaid } from '../lib/payroll';
+import { ACCOUNT_IDS, getRequiredAccountByIdOrName } from '../lib/ledger';
+import { processPayrollPayout } from '../lib/payrollProcessor';
 
 interface Props {
   isOpen: boolean;
@@ -74,48 +74,34 @@ export default function PayrollModal({ isOpen, onClose, onSuccess, employees }: 
         return;
       }
 
-      const batch = writeBatch(db);
       let processedCount = 0;
       let skippedCount = 0;
 
       for (const record of records) {
         if (!record.employeeId || !record.month) continue;
 
-        const payrollRef = doc(db, 'payrollRecords', getPayrollRecordId(record.employeeId, record.month));
-        const existingPayroll = await getDoc(payrollRef);
-        if (isPayrollAlreadyPaid(existingPayroll.exists() ? existingPayroll.data() as PayrollRecord : null)) {
+        const processed = await processPayrollPayout({
+          db,
+          payout: {
+            employeeId: record.employeeId,
+            employeeName: record.employeeName,
+            month: record.month,
+            baseSalary: record.baseSalary,
+            bonuses: record.bonuses,
+            deductions: record.deductions,
+            netSalary: record.netSalary || 0,
+            createdAt: record.createdAt,
+          },
+          debitAccount: expenseAcc,
+          creditAccount: assetAcc,
+          actorId: profile.uid,
+          actorName: profile.name || profile.email,
+        });
+
+        if (!processed) {
           skippedCount += 1;
           continue;
         }
-
-        const txnRef = appendLedgerEntryToBatch(db, batch, accounts, {
-          date: new Date().toISOString().split('T')[0],
-          description: `Payroll Payout: ${record.employeeName} (${record.month})`,
-          amount: record.netSalary || 0,
-          debitAccountId: expenseAcc.id,
-          creditAccountId: assetAcc.id,
-          reference: payrollRef.id,
-          type: 'payroll'
-        });
-
-        batch.set(payrollRef, {
-          ...record,
-          status: 'paid',
-          payoutDate: new Date().toISOString().split('T')[0],
-          approvedBy: profile.uid,
-          approvedAt: new Date().toISOString(),
-          transactionId: txnRef.id
-        });
-
-        batch.set(doc(collection(db, 'auditLogs')), {
-          actorId: profile.uid,
-          actorName: profile.name || profile.email,
-          action: 'PAYROLL_PROCESSED',
-          entityType: 'payroll',
-          entityId: payrollRef.id,
-          afterState: record,
-          timestamp: new Date().toISOString()
-        });
         processedCount += 1;
       }
 
@@ -124,7 +110,6 @@ export default function PayrollModal({ isOpen, onClose, onSuccess, employees }: 
         return;
       }
 
-      await batch.commit();
       toast.success(`Payroll processed for ${processedCount} employees${skippedCount ? `; skipped ${skippedCount} already paid.` : ''}.`);
       onSuccess();
       onClose();

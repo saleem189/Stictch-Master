@@ -2,8 +2,12 @@ node_modules/
 build/
 dist/
 coverage/
+playwright-report/
+test-results/
 .wsl/
 .DS_Store
 *.log
 .env*
 !.env.example
+!.env.demo
+.firebase-emulator-data/
