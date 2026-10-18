@@ -1,13 +1,43 @@
-import React, { useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Ruler, CheckCircle2, Search, ArrowRight, Star, Clock, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { doc, getDoc } from 'firebase/firestore';
+import { ArrowDown, ArrowRight, ArrowUpRight, Check, Clock3, Menu, Ruler, Scissors, Search, ShieldCheck, X } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { PublicOrderTracking } from '../types';
+import type { PublicOrderTracking } from '../types';
 import { useTranslation } from 'react-i18next';
 import BrandLogo from '../components/BrandLogo';
+import LanguageToggle from '../components/LanguageToggle';
 import { normalizePublicOrderTracking } from '../lib/publicOrderTracking';
+import AtelierImage from '../components/atelier/AtelierImage';
+import { AtelierButton, AtelierNavbar, StitchDivider, SwatchCard } from '../components/atelier/AtelierUI';
+
+// Unsplash search references: "bespoke tailoring atelier suit jacket", "fashion tailoring fabric drape", "sewing thread textile close-up", "tailor hands fabric workshop".
+const image = {
+  hero: 'https://images.unsplash.com/photo-1594932224828-b4b059b6f6f9?q=85&w=1800&auto=format&fit=crop',
+  cutting: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?q=85&w=1000&auto=format&fit=crop',
+  cloth: 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=85&w=900&auto=format&fit=crop',
+  thread: 'https://images.unsplash.com/photo-1452860606245-08befc0ff44b?q=85&w=900&auto=format&fit=crop',
+  craft: 'https://images.unsplash.com/photo-1590736969955-71cc94901144?q=85&w=1400&auto=format&fit=crop',
+};
+
+const services = [
+  { name: 'Suits', img: image.hero, number: '01' },
+  { name: 'Sherwani', img: image.cloth, number: '02' },
+  { name: 'Shalwar Kameez', img: image.cutting, number: '03' },
+  { name: 'Wedding wear', img: image.craft, number: '04' },
+  { name: 'Alterations', img: image.thread, number: '05' },
+  { name: 'Ladies’ tailoring', img: image.cloth, number: '06' },
+];
+
+const swatches = [
+  { name: 'Oxblood wool', color: 'linear-gradient(135deg,#421d27,#7e4148)' },
+  { name: 'Warm ivory', color: 'linear-gradient(135deg,#e5d8c4,#faf5e9)' },
+  { name: 'Bottle green', color: 'linear-gradient(135deg,#25372f,#526a59)' },
+  { name: 'Soft sage', color: 'linear-gradient(135deg,#879283,#c0c5b7)' },
+  { name: 'Clay linen', color: 'linear-gradient(135deg,#98644f,#d2a38a)' },
+  { name: 'Midnight ink', color: 'linear-gradient(135deg,#171b1c,#414849)' },
+];
 
 export default function Home() {
   const { t } = useTranslation();
@@ -15,304 +45,154 @@ export default function Home() {
   const [orderStatus, setOrderStatus] = useState<PublicOrderTracking | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
-  const [heroImageLoaded, setHeroImageLoaded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [selectedSwatch, setSelectedSwatch] = useState('');
 
-  const checkStatus = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orderQuery) return;
-    
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const checkStatus = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trackingCode = orderQuery.trim();
+    if (!trackingCode || searching) return;
     setSearching(true);
     setError('');
     setOrderStatus(null);
-    
     try {
-      const trackingCode = orderQuery.trim();
-      const snap = await getDoc(doc(db, 'publicOrderTracking', trackingCode));
-      
-      if (snap.exists()) {
-        setOrderStatus(normalizePublicOrderTracking(snap.id, snap.data()));
-      } else {
-        setError('Tracking record not found. Please check your tracking code.');
-      }
-    } catch (err) {
-      console.error(err);
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setSearching(false);
-    }
+      const snapshot = await getDoc(doc(db, 'publicOrderTracking', trackingCode));
+      if (snapshot.exists()) setOrderStatus(normalizePublicOrderTracking(snapshot.id, snapshot.data()));
+      else setError(t('Tracking record not found. Please check your tracking code.'));
+    } catch (cause) {
+      console.error('Unable to retrieve public order status', cause);
+      setError(t('Something went wrong. Please try again.'));
+    } finally { setSearching(false); }
   };
 
-  return (
-    <div className="bg-white text-slate-900 min-h-screen overflow-x-hidden font-sans">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full overflow-x-hidden bg-white/80 backdrop-blur-xl z-50 border-b border-slate-100/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-6 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <BrandLogo className="min-w-0" markClassName="h-10 w-10 sm:h-12 sm:w-12" textClassName="truncate text-lg sm:text-2xl leading-none" />
-          </div>
-          
-          <div className="flex shrink-0 items-center gap-3 sm:gap-10">
-            <div className="hidden lg:flex items-center gap-8 text-[11px] font-black uppercase tracking-widest text-slate-400">
-              <a href="#services" className="hover:text-indigo-600 transition-colors">Experience</a>
-              <a href="#tracking" className="hover:text-indigo-600 transition-colors">Tracking</a>
-              <a href="#contact" className="hover:text-indigo-600 transition-colors">Philosophy</a>
-            </div>
-            <Link to="/admin" className="px-3 sm:px-7 py-2.5 sm:py-3.5 bg-slate-950 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest whitespace-nowrap hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">
-              <span className="sm:hidden">Admin</span>
-              <span className="hidden sm:inline">Admin Console</span>
-            </Link>
+  const closeMenu = () => setMenuOpen(false);
+  const process = ['Consultation', 'Measurements', 'Fabric selection', 'Fittings', 'Delivery'];
+
+  return <main className="min-h-screen overflow-x-hidden bg-atelier-paper text-atelier-ink">
+    <AtelierNavbar className={scrolled ? 'shadow-sm' : 'bg-transparent'}>
+      <div className={`mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-5 transition-all duration-300 sm:px-8 ${scrolled ? 'h-16' : 'h-[82px]'}`}>
+        <Link to="/" aria-label={t('Home')} onClick={closeMenu}><BrandLogo markClassName="h-10 w-10 rounded-xl" textClassName="font-display text-xl" /></Link>
+        <nav aria-label={t('Main navigation')} className="hidden items-center gap-8 md:flex">
+          <a href="#services" className="text-xs font-semibold text-slate-600 transition hover:text-atelier-oxblood">{t('Our services')}</a>
+          <a href="#process" className="text-xs font-semibold text-slate-600 transition hover:text-atelier-oxblood">{t('The process')}</a>
+          <a href="#fabrics" className="text-xs font-semibold text-slate-600 transition hover:text-atelier-oxblood">{t('Fabrics')}</a>
+          <a href="#tracking" className="text-xs font-semibold text-slate-600 transition hover:text-atelier-oxblood">{t('Order tracking')}</a>
+          <Link to="/client" className="text-xs font-semibold text-slate-600 transition hover:text-atelier-oxblood">{t('Client portal')}</Link>
+        </nav>
+        <div className="hidden items-center gap-3 md:flex"><LanguageToggle /><Link to="/client/request-quote" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-atelier-oxblood px-4 text-xs font-bold text-white shadow-sm transition hover:bg-atelier-oxblood-dark">{t('Request a bespoke quote')} <ArrowUpRight size={15} /></Link></div>
+        <button type="button" aria-label={menuOpen ? t('Close menu') : t('Open menu')} aria-expanded={menuOpen} aria-controls="atelier-mobile-menu" onClick={() => setMenuOpen(value => !value)} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-atelier-paper text-slate-900 md:hidden">{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+      </div>
+      {menuOpen && <motion.nav id="atelier-mobile-menu" aria-label={t('Main navigation')} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] flex min-h-dvh flex-col bg-atelier-paper px-6 pb-8 pt-5 md:hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4"><BrandLogo markClassName="h-10 w-10 rounded-xl" textClassName="font-display text-xl" /><button type="button" aria-label={t('Close menu')} onClick={closeMenu} className="grid h-11 w-11 place-items-center rounded-full border border-slate-200"><X size={20} /></button></div>
+        <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center gap-2 py-8">
+          {['Our services', 'The process', 'Fabrics', 'Order tracking'].map((label, index) => <motion.a key={label} href={['#services', '#process', '#fabrics', '#tracking'][index]} onClick={closeMenu} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .05 }} className="border-b border-slate-200 py-4 font-display text-3xl">{t(label)}</motion.a>)}
+          <Link to="/client" onClick={closeMenu} className="border-b border-slate-200 py-4 font-display text-3xl">{t('Client portal')}</Link>
+        </div>
+        <div className="mx-auto flex w-full max-w-lg items-center justify-between"><LanguageToggle /><Link to="/client/request-quote" onClick={closeMenu} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-atelier-oxblood px-5 text-sm font-bold text-white">{t('Request a bespoke quote')} <ArrowUpRight size={16} /></Link></div>
+      </motion.nav>}
+    </AtelierNavbar>
+
+    <section className="relative mx-auto grid max-w-[1440px] items-center gap-10 px-5 pb-20 pt-12 sm:px-8 sm:pb-28 sm:pt-16 lg:min-h-[690px] lg:grid-cols-12 lg:gap-8 lg:py-20">
+      <div className="relative z-10 lg:col-span-6">
+        <p className="atelier-eyebrow mb-6 flex items-center gap-3"><span className="h-px w-8 bg-atelier-brass" />{t('The atelier, digitised')}</p>
+        <h1 className="font-display max-w-3xl text-[clamp(3.5rem,8.2vw,7.5rem)] leading-[.92] tracking-[-.055em] text-atelier-ink">{t('Cut to you.')}<br /><em className="font-normal text-atelier-oxblood">{t('Stitched by hand.')}</em></h1>
+        <p className="mt-7 max-w-lg text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">{t('Thoughtful tailoring, shaped around your measurements, your point of view, and the way you want to feel.')}</p>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Link to="/client/request-quote" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-atelier-oxblood px-7 text-sm font-bold text-white shadow-sm transition hover:bg-atelier-oxblood-dark">{t('Request a bespoke quote')} <ArrowRight size={17} className="rtl-flip" /></Link>
+          <a href="#tracking" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold text-slate-700 transition hover:bg-atelier-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-atelier-brass">{t('Track your order')} <ArrowDown size={16} /></a>
+        </div>
+        <div className="mt-12 flex items-center gap-4 text-xs font-semibold text-slate-500"><span className="grid h-9 w-9 place-items-center rounded-full border border-atelier-brass/35 text-atelier-brass"><Ruler size={17} /></span>{t('Made for your measurements. Refined in person.')}</div>
+      </div>
+
+      <motion.div className="relative lg:col-span-6 lg:col-start-7" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .8, ease: [.22, 1, .36, 1] }}>
+        <div className="relative ms-auto w-[94%] overflow-hidden rounded-[2rem] sm:rounded-[2.5rem]">
+          <AtelierImage src={image.hero} alt={t('A tailor carefully shaping a bespoke jacket')} aspect="aspect-[4/4.2]" priority imageClassName="[filter:sepia(.14)_saturate(.85)]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-atelier-ink/65 via-transparent to-atelier-ink/5" />
+          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 text-white sm:p-8">
+            <div><p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-white/70">{t('The details matter')}</p><p className="font-display mt-2 text-2xl sm:text-3xl">{t('Considered from first measure to final stitch.')}</p></div>
+            <span className="hidden h-12 w-12 shrink-0 place-items-center rounded-full border border-white/40 sm:grid"><Scissors size={20} /></span>
           </div>
         </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="overflow-x-hidden pt-32 sm:pt-48 pb-20 px-4 sm:px-8">
-        <div className="mx-auto grid w-full max-w-7xl items-center gap-12 sm:gap-16 lg:grid-cols-2 lg:gap-24">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="w-full min-w-0 space-y-8 sm:max-w-xl sm:space-y-12 lg:max-w-none"
-          >
-            <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">
-              <Star size={14} />
-              <span>Couture & Precision</span>
-            </div>
-            <h1 className="max-w-full break-words text-4xl min-[380px]:text-5xl sm:text-7xl lg:text-8xl font-black tracking-tight leading-[0.95] text-slate-900">
-              The Art of the <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Perfect Fit.</span>
-            </h1>
-            <p className="max-w-full text-lg sm:max-w-xl sm:text-xl text-slate-500 leading-relaxed font-medium">
-              We've digitized the bespoke experience. High-end tailoring meets modern efficiency for the modern individual who demands excellence in every thread.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/client/request-quote" className="w-full max-w-full sm:w-auto px-6 sm:px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs text-center leading-5 flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-100 group">
-                {t('Request Bespoke Quote')} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
-              <a href="#tracking" className="w-full max-w-full sm:w-auto px-6 sm:px-10 py-5 bg-white border border-slate-200 text-slate-900 rounded-[2rem] font-black uppercase tracking-widest text-xs text-center leading-5 hover:bg-slate-50 transition-all flex items-center justify-center">
-                {t('Track Existing Order')}
-              </a>
-            </div>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 40 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
-            className="relative w-full min-w-0"
-          >
-            <div className="aspect-[4/5] rounded-[3rem] overflow-hidden shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] relative z-10 border-8 border-white bg-slate-900">
-              {!heroImageLoaded && (
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,0.35),transparent_30%),linear-gradient(145deg,#111827_0%,#334155_55%,#f8fafc_100%)]">
-                  <div className="absolute inset-x-10 bottom-12 space-y-4 text-white">
-                    <div className="h-3 w-24 rounded-full bg-white/60" />
-                    <div className="h-2 w-44 rounded-full bg-white/30" />
-                    <div className="grid grid-cols-3 gap-3 pt-4">
-                      <div className="h-20 rounded-2xl bg-white/10 border border-white/10" />
-                      <div className="h-20 rounded-2xl bg-white/20 border border-white/10" />
-                      <div className="h-20 rounded-2xl bg-white/10 border border-white/10" />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <img 
-                src="https://images.unsplash.com/photo-1594932224828-b4b059b6f6f9?q=80&w=2680&auto=format&fit=crop" 
-                alt="Tailor working"
-                className={`w-full h-full object-cover scale-110 hover:scale-100 transition-all duration-[2s] ${heroImageLoaded ? 'opacity-100' : 'opacity-0'}`}
-                referrerPolicy="no-referrer"
-                onLoad={() => setHeroImageLoaded(true)}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent"></div>
-            </div>
-            
-            <div className="relative z-20 mt-4 flex items-center gap-4 rounded-[2rem] border border-slate-100 bg-white p-5 shadow-2xl sm:absolute sm:-bottom-10 sm:-right-10 sm:mt-0 sm:gap-6 sm:rounded-[2.5rem] sm:p-8 sm:animate-bounce-subtle">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center shadow-inner">
-                <CheckCircle2 size={32} />
-              </div>
-              <div>
-                <p className="text-3xl sm:text-4xl font-black text-slate-900 leading-none">500+</p>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Bespoke Clients</p>
-              </div>
-            </div>
-            
-            <div className="absolute -top-12 -left-12 hidden w-64 h-64 bg-indigo-500/10 rounded-full blur-[100px] -z-10 sm:block" />
-          </motion.div>
+        <div className="absolute -start-1 top-[15%] hidden w-32 rounded-xl border border-white/70 bg-atelier-paper/95 p-3 shadow-xl sm:block lg:-start-4">
+          <AtelierImage src={image.thread} alt={t('Tailoring thread and cloth detail')} aspect="aspect-square" className="rounded-lg" />
+          <p className="mt-2 text-[9px] font-extrabold uppercase tracking-widest text-slate-500">{t('A hand in every detail')}</p>
         </div>
-      </section>
+        <svg aria-hidden="true" viewBox="0 0 540 120" className="pointer-events-none absolute -bottom-10 -start-8 hidden w-[90%] overflow-visible text-atelier-brass sm:block">
+          <motion.path d="M4 84 C 110 4, 182 122, 284 58 S 420 15, 536 71" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="5 7" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.6, delay: .3, ease: 'easeInOut' }} />
+        </svg>
+      </motion.div>
+    </section>
 
-      {/* Benefits */}
-      <section id="services" className="scroll-mt-24 py-24 bg-slate-50 border-y border-slate-100">
-        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-3 gap-8 text-center">
-          <div className="p-8 space-y-4">
-            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-indigo-600 mx-auto">
-              <Ruler size={32} />
-            </div>
-            <h3 className="text-xl font-bold">Perfect Measurement</h3>
-            <p className="text-slate-500">We store your profile digitally to ensure every future order fits exactly like the first one.</p>
-          </div>
-          <div className="p-8 space-y-4">
-            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-indigo-600 mx-auto">
-              <Clock size={32} />
-            </div>
-            <h3 className="text-xl font-bold">On-Time Delivery</h3>
-            <p className="text-slate-500">Real-time status updates via our tracking portal. No more guessing when your dress will be ready.</p>
-          </div>
-          <div className="p-8 space-y-4">
-            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-indigo-600 mx-auto">
-              <ShieldCheck size={32} />
-            </div>
-            <h3 className="text-xl font-bold">Quality Guaranteed</h3>
-            <p className="text-slate-500">From fabric selection to final stitching, we maintain top-tier standards for every stitch.</p>
-          </div>
+    <section className="border-y border-atelier-brass/20 bg-atelier-ivory">
+      <div className="mx-auto grid max-w-[1440px] grid-cols-2 px-5 py-7 sm:px-8 md:grid-cols-4">
+        {[['01', 'Made to measure'], ['02', 'One piece at a time'], ['03', 'Fit, refined in person'], ['04', 'Your workshop, in view']].map(([value, label]) => <div key={value} className="flex items-center gap-3 border-e border-atelier-brass/20 px-4 py-2 first:ps-0 last:border-0 md:px-7"><span className="font-display text-2xl text-atelier-oxblood">{value}</span><span className="max-w-28 text-[10px] font-bold uppercase leading-4 tracking-wider text-slate-600">{t(label)}</span></div>)}
+      </div>
+    </section>
+
+    <section id="services" className="px-5 py-20 sm:px-8 sm:py-28">
+      <div className="mx-auto max-w-[1440px]">
+        <div className="grid gap-5 md:grid-cols-12 md:items-end">
+          <div className="md:col-span-7"><p className="atelier-eyebrow">{t('Made around you')}</p><h2 className="font-display mt-3 max-w-2xl text-4xl leading-tight tracking-tight sm:text-6xl">{t('A wardrobe with your name in the seams.')}</h2></div>
+          <p className="max-w-md text-sm leading-7 text-slate-600 md:col-span-4 md:col-start-9">{t('From a first fitting to the final press, every garment begins with a conversation—not a rack.')}</p>
         </div>
-      </section>
-
-      {/* Order Tracking Portal */}
-      <section id="tracking" className="scroll-mt-24 py-24 sm:py-48 px-4 sm:px-8 bg-slate-950 text-white relative overflow-hidden">
-        <div className="max-w-4xl mx-auto text-center space-y-16 sm:space-y-24 relative z-10">
-          <div className="space-y-6 sm:space-y-8">
-            <div className="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-indigo-600/10 border border-indigo-500/20">
-               <ShieldCheck size={40} />
-            </div>
-            <h2 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-none">Trace Your Masterpiece.</h2>
-            <p className="text-lg sm:text-xl text-slate-400 font-medium max-w-2xl mx-auto">
-              Real-time oversight of your tailoring lifecycle. Enter your unique ID to synchronize with our workshop.
-            </p>
-          </div>
-          
-          <form onSubmit={checkStatus} className="relative group max-w-2xl mx-auto">
-            <div className="absolute inset-y-0 left-6 sm:left-10 flex items-center text-slate-600 group-focus-within:text-indigo-400 transition-colors">
-              <Search size={28} />
-            </div>
-            <input 
-              type="text" 
-              placeholder="Unique Order Ref (e.g. ord_7f2x9z)"
-              className="w-full bg-white/5 border-2 border-white/10 rounded-[3rem] pl-20 sm:pl-24 pr-8 py-7 sm:py-9 text-xl sm:text-2xl font-black placeholder:text-slate-700 focus:border-indigo-500 focus:bg-white/10 outline-none transition-all shadow-2xl tracking-tight"
-              value={orderQuery}
-              onChange={e => setOrderQuery(e.target.value)}
-            />
-            <button 
-              type="submit"
-              disabled={searching}
-              className="mt-6 sm:mt-0 sm:absolute sm:right-4 sm:top-4 sm:bottom-4 px-10 bg-indigo-600 text-white rounded-[2.5rem] text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 w-full sm:w-auto"
-            >
-              {searching ? 'Synchronizing...' : 'Sync Status'}
-            </button>
-          </form>
-
-          {error && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-6 bg-red-500/10 text-red-500 rounded-3xl font-black uppercase tracking-widest text-[10px] border border-red-500/20 max-w-md mx-auto"
-            >
-              {error}
-            </motion.div>
-          )}
-
-          {orderStatus && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 40 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="bg-white text-slate-900 border border-white/10 rounded-[3rem] p-8 sm:p-12 text-left shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] space-y-10 sm:space-y-12 backdrop-blur-xl"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 sm:border-b border-slate-100 sm:pb-10">
-                 <div>
-                    <h3 className="text-3xl sm:text-5xl font-black tracking-tight">Bespoke Order</h3>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mt-3">Tracking ID: {orderStatus.trackingCode}</p>
-                 </div>
-                 <div className={`self-start sm:self-center px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border-2 ${
-                   orderStatus.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-100' : 
-                   orderStatus.status === 'pending' ? 'bg-slate-50 text-slate-500 border-slate-200' : 
-                   'bg-indigo-50 text-indigo-600 border-indigo-100'
-                 }`}>
-                   {orderStatus.status}
-                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-                 <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Composition</p>
-                    <p className="font-black text-slate-900 text-lg">{orderStatus.itemCount} Units</p>
-                 </div>
-                 <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Date</p>
-                    <p className="font-black text-slate-900 text-lg">{orderStatus.dueDate ? new Date(orderStatus.dueDate).toLocaleDateString() : 'Pending'}</p>
-                 </div>
-                 <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Sync</p>
-                    <p className="font-black text-slate-900 text-lg">{orderStatus.updatedAt ? new Date(orderStatus.updatedAt).toLocaleDateString() : 'Pending'}</p>
-                 </div>
-                 <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Privacy</p>
-                    <p className="font-black text-green-600 text-lg">Sanitized</p>
-                 </div>
-              </div>
-
-              <div className="space-y-6 pt-6 border-t border-slate-50">
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lifecycle Visualization</p>
-                 <div className="flex flex-col sm:flex-row gap-4 sm:gap-2">
-                    {[
-                      { key: 'pending', label: 'Registered', color: 'bg-indigo-600 shadow-lg shadow-indigo-200' },
-                      { key: 'cutting', label: 'Precision Cutting', color: orderStatus.steps.cutting ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'stitching', label: 'Structural Stitching', color: orderStatus.steps.stitching ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'finishing', label: 'Final Articulation', color: orderStatus.steps.finishing ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' },
-                      { key: 'ready', label: 'Ready for Fitting', color: orderStatus.steps.ready ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-100' }
-                    ].map((step, i) => (
-                      <div key={i} className="flex-1 space-y-3">
-                        <div className={`h-3 rounded-full ${step.color} transition-all duration-1000`}></div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{step.label}</p>
-                      </div>
-                    ))}
-                 </div>
-              </div>
-            </motion.div>
-          )}
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {services.map(item => <Link key={item.name} to="/client/request-quote" className="group relative overflow-hidden rounded-2xl bg-atelier-ink text-white">
+            <AtelierImage src={item.img} alt={t(item.name)} aspect="aspect-[1.2/1]" imageClassName="opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90 [filter:sepia(.2)_saturate(.8)]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-atelier-ink/85 via-atelier-ink/5 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-5 sm:p-6"><div><span className="text-[10px] font-bold tracking-[.2em] text-atelier-brass">{item.number}</span><h3 className="font-display mt-1 text-2xl sm:text-3xl">{t(item.name)}</h3><p className="mt-1 text-xs text-white/75">{t('Made to order · timing confirmed at consultation')}</p></div><span className="grid h-10 w-10 place-items-center rounded-full border border-white/40 transition group-hover:bg-white group-hover:text-atelier-ink"><ArrowUpRight size={17} /></span></div>
+          </Link>)}
         </div>
-        <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-slate-900/50 to-transparent -z-0" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-600/5 rounded-full blur-[150px] -z-0" />
-      </section>
+      </div>
+    </section>
 
-      {/* Footer */}
-      <footer id="contact" className="scroll-mt-24 bg-slate-950 text-white py-20">
-        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-12">
-          <div className="space-y-6">
-            <div className="flex items-center gap-2">
-              <BrandLogo dark markClassName="h-9 w-9 rounded-xl" textClassName="text-xl" />
-            </div>
-            <p className="text-slate-400 text-sm leading-relaxed">
-              Leading the digital revolution in the tailoring industry. Precision, style, and care in every stitch.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-bold mb-6">Quick Links</h4>
-            <ul className="space-y-4 text-sm text-slate-400 font-medium">
-              <li><a href="#" className="hover:text-white transition-colors">Our History</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Bulk Orders</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Measurement Guide</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Fabric Sourcing</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold mb-6">Contact Us</h4>
-            <div className="space-y-4 text-sm text-slate-400 font-medium leading-relaxed">
-              <p>Plot 42, Main Mall Road,<br />Lahore, Pakistan</p>
-              <p>+92 300 1234567</p>
-              <p>hello@stitchmaster.com</p>
-            </div>
-          </div>
-          <div>
-            <h4 className="font-bold mb-6">Status App</h4>
-            <p className="text-sm text-slate-400 mb-6 font-medium">Download our mobile app to track orders on the go.</p>
-            <div className="flex gap-4">
-               <div className="w-32 h-10 bg-white/10 rounded-lg border border-white/5"></div>
-               <div className="w-32 h-10 bg-white/10 rounded-lg border border-white/5"></div>
-            </div>
-          </div>
+    <section id="process" className="fabric-weave border-y border-slate-200 px-5 py-20 sm:px-8 sm:py-24">
+      <div className="mx-auto max-w-[1440px]">
+        <div className="max-w-2xl"><p className="atelier-eyebrow">{t('The process')}</p><h2 className="font-display mt-3 text-4xl leading-tight sm:text-5xl">{t('Measured in moments. Made to last.')}</h2><p className="mt-4 text-sm leading-7 text-slate-600">{t('A clear, considered process from your first idea to the finished piece.')}</p></div>
+        <div className="relative mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="absolute inset-x-0 top-5 hidden border-t border-dashed border-atelier-brass/50 lg:block" />
+          {process.map((step, index) => <div key={step} className="relative"><span className="relative z-10 grid h-10 w-10 place-items-center rounded-full border border-atelier-brass bg-atelier-paper font-display text-sm text-atelier-oxblood">{String(index + 1).padStart(2, '0')}</span><h3 className="font-display mt-5 text-xl">{t(step)}</h3><p className="mt-2 text-xs leading-6 text-slate-500">{t(`Process ${index + 1} description`)}</p></div>)}
         </div>
-        <div className="max-w-7xl mx-auto px-6 pt-20 mt-20 border-t border-white/5 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">
-          © 2024 StitchMaster ERP. All Rights Reserved.
+      </div>
+    </section>
+
+    <section id="fabrics" className="px-5 py-20 sm:px-8 sm:py-28">
+      <div className="mx-auto grid max-w-[1440px] gap-12 lg:grid-cols-12 lg:items-center">
+        <div className="lg:col-span-4"><p className="atelier-eyebrow">{t('The cloth comes first')}</p><h2 className="font-display mt-3 text-4xl leading-tight sm:text-5xl">{t('A touch, a drape, a point of view.')}</h2><p className="mt-5 text-sm leading-7 text-slate-600">{t('Choose a starting point. We will help you find the right weight, texture, and finish in person.')}</p><StitchDivider /><p className="text-xs font-semibold text-slate-500">{selectedSwatch ? `${t('Selected swatch')}: ${t(selectedSwatch)}` : t('Explore a few atelier tones')}</p><Link to="/client/request-quote" className="mt-5 inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-atelier-oxblood">{t('Request this fabric')} <ArrowRight size={14} className="rtl-flip" /></Link></div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-7 lg:col-start-6">{swatches.map(item => <SwatchCard key={item.name} name={t(item.name)} color={item.color} selected={selectedSwatch === item.name} onClick={() => setSelectedSwatch(item.name)} />)}</div>
+      </div>
+    </section>
+
+    <section className="px-5 pb-20 sm:px-8 sm:pb-28">
+      <div className="mx-auto grid max-w-[1440px] overflow-hidden rounded-[2rem] bg-atelier-ink text-white md:grid-cols-2">
+        <AtelierImage src={image.craft} alt={t('A craftsperson working carefully with fabric')} aspect="aspect-[4/3]" imageClassName="[filter:sepia(.22)_saturate(.8)]" />
+        <div className="flex flex-col justify-center p-7 sm:p-12 lg:p-16"><p className="atelier-eyebrow">{t('The signature')}</p><h2 className="font-display mt-4 text-4xl leading-tight sm:text-5xl">{t('The quiet confidence of a perfect fit.')}</h2><p className="mt-5 max-w-lg text-sm leading-7 text-white/70">{t('Care lives in the small things: a balanced shoulder, a clean finish, a seam that sits exactly where it should.')}</p><div className="mt-8 flex items-center gap-4"><span className="grid h-11 w-11 place-items-center rounded-full border border-atelier-brass/60 text-atelier-brass"><Scissors size={19} /></span><span className="font-display text-lg italic text-white/90">{t('Crafted with intention.')}</span></div></div>
+      </div>
+    </section>
+
+    <section className="px-5 pb-20 sm:px-8 sm:pb-28"><div className="mx-auto grid max-w-[1440px] gap-8 border-y border-slate-200 py-10 md:grid-cols-12 md:items-center">
+      <div className="md:col-span-3"><p className="atelier-eyebrow">{t('A note from the atelier')}</p></div><blockquote className="font-display text-3xl leading-snug text-slate-800 sm:text-4xl md:col-span-8 md:col-start-5">“{t('The best garment is the one that feels like it was always yours.')}”</blockquote>
+    </div></section>
+
+    <section id="tracking" className="bg-atelier-ink px-5 py-20 text-white sm:px-8 sm:py-24">
+      <div className="mx-auto grid max-w-[1240px] gap-10 lg:grid-cols-12 lg:items-start">
+        <div className="lg:col-span-5"><div className="mb-5 grid h-12 w-12 place-items-center rounded-xl border border-atelier-brass/30 text-atelier-brass"><ShieldCheck size={21} /></div><p className="atelier-eyebrow">{t('Already have an order?')}</p><h2 className="font-display mt-3 text-4xl sm:text-5xl">{t('Your fitting, in progress.')}</h2><p className="mt-4 max-w-md text-sm leading-7 text-white/65">{t('Enter the tracking code shared with you to see the latest note from the workshop.')}</p></div>
+        <div className="lg:col-span-6 lg:col-start-7"><form onSubmit={checkStatus} className="flex flex-col gap-3 sm:flex-row"><label className="sr-only" htmlFor="tracking-code">{t('Order tracking code')}</label><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-white/40" size={18} aria-hidden="true" /><input id="tracking-code" type="text" autoComplete="off" placeholder={t('Enter your tracking code')} className="min-h-14 w-full rounded-xl border border-white/15 bg-white/5 py-3 ps-12 pe-4 text-base text-white placeholder:text-white/40 outline-none transition focus:border-atelier-brass focus:ring-2 focus:ring-atelier-brass/30" value={orderQuery} onChange={event => { setOrderQuery(event.target.value); setError(''); }} aria-describedby={error ? 'tracking-error' : undefined} aria-invalid={Boolean(error)} required /></div><AtelierButton type="submit" disabled={searching || !orderQuery.trim()} size="lg">{searching ? <><Clock3 size={16} className="animate-pulse" />{t('Checking status…')}</> : <>{t('Track order')} <ArrowRight size={16} className="rtl-flip" /></>}</AtelierButton></form>
+          {error && <p id="tracking-error" role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm font-medium text-red-200">{error}</p>}
+          {orderStatus && <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} aria-live="polite" className="mt-5 rounded-2xl border border-white/10 bg-atelier-paper p-5 text-slate-900 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><p className="text-xs font-bold uppercase tracking-widest text-slate-500">{t('Order update')}</p><h3 className="font-display mt-1 text-xl">{t('Order status')}</h3><p className="mt-1 font-mono text-xs text-slate-500">{t('Reference')}: {orderStatus.trackingCode}</p></div><span className="rounded-full bg-atelier-sage/15 px-3 py-1.5 text-xs font-bold capitalize text-atelier-sage">{t(orderStatus.status)}</span></div><div className="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3"><div><p className="text-xs text-slate-500">{t('Items')}</p><p className="mt-1 font-bold">{orderStatus.itemCount}</p></div><div><p className="text-xs text-slate-500">{t('Target date')}</p><p className="mt-1 font-bold">{orderStatus.dueDate ? new Date(orderStatus.dueDate).toLocaleDateString() : t('To be confirmed')}</p></div><div><p className="text-xs text-slate-500">{t('Last updated')}</p><p className="mt-1 font-bold">{orderStatus.updatedAt ? new Date(orderStatus.updatedAt).toLocaleDateString() : t('Not available')}</p></div></div><ol aria-label={t('Production progress')} className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-200 pt-5 sm:grid-cols-5">{[{ key: 'registered', label: t('Received'), done: orderStatus.steps.registered }, { key: 'cutting', label: t('Cutting'), done: orderStatus.steps.cutting }, { key: 'stitching', label: t('Stitching'), done: orderStatus.steps.stitching }, { key: 'finishing', label: t('Finishing'), done: orderStatus.steps.finishing }, { key: 'ready', label: t('Ready'), done: orderStatus.steps.ready }].map(step => <li key={step.key} className="flex items-center gap-2 text-xs font-semibold"><span className={`grid h-5 w-5 place-items-center rounded-full ${step.done ? 'bg-atelier-sage text-white' : 'bg-slate-200 text-slate-500'}`}>{step.done ? <Check size={12} /> : null}</span>{step.label}</li>)}</ol></motion.div>}
         </div>
-      </footer>
-    </div>
-  );
+      </div>
+    </section>
+
+    <section className="bg-atelier-ivory px-5 py-14 sm:px-8"><div className="mx-auto flex max-w-[1240px] flex-col justify-between gap-6 sm:flex-row sm:items-center"><div><p className="atelier-eyebrow">{t('Come by the atelier')}</p><h2 className="font-display mt-2 text-3xl">{t('A fitting is where the story begins.')}</h2><p className="mt-2 text-sm text-slate-600">{t('Book a conversation about your next piece.')}</p></div><Link to="/client/request-quote" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-atelier-paper px-5 text-sm font-bold text-slate-800 hover:border-atelier-brass">{t('Arrange a consultation')} <ArrowUpRight size={16} /></Link></div></section>
+
+    <footer className="border-t border-slate-200 bg-atelier-paper px-5 py-10 sm:px-8"><div className="mx-auto flex max-w-[1440px] flex-col gap-8 sm:flex-row sm:items-center sm:justify-between"><div><BrandLogo markClassName="h-10 w-10 rounded-xl" textClassName="font-display text-xl" /><p className="mt-3 text-xs text-slate-500">© {new Date().getFullYear()} {t('Tailoring ERP. Crafted with care.')}</p></div><div className="flex flex-wrap items-center gap-5 text-xs font-semibold text-slate-600"><Link to="/client" className="hover:text-atelier-oxblood">{t('Client portal')}</Link><Link to="/admin" className="hover:text-atelier-oxblood">{t('Staff sign in')}</Link><LanguageToggle /></div></div><div className="mx-auto mt-8 max-w-[1440px]"><StitchDivider className="my-0" /></div></footer>
+  </main>;
 }

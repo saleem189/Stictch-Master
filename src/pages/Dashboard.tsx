@@ -16,7 +16,7 @@ import {
   Database,
   DollarSign
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import NewOrderForm from '../components/NewOrderForm';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from 'recharts';
@@ -25,6 +25,7 @@ import { toast } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { seedDatabase } from '../lib/seeder';
 import { PageHeader, PageShell } from '../components/layout/AppLayout';
+import { AtelierSkeleton } from '../components/atelier/AtelierUI';
 import {
   buildDashboardMetrics,
   getActiveOrderStatuses,
@@ -34,7 +35,7 @@ import {
 const QuickAction = ({ icon: Icon, label, color, onClick }: { icon: React.ElementType, label: string, color: string, onClick: () => void }) => (
   <button 
     onClick={onClick}
-    className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50 transition-all group active:scale-95"
+    className="flex min-w-24 flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-atelier-brass hover:shadow-lg group active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-atelier-brass"
   >
     <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center text-white shadow-lg transition-transform group-hover:-translate-y-1`}>
       <Icon size={24} />
@@ -54,7 +55,7 @@ interface StatCardProps {
 
 const StatCard = ({ title, value, trend, trendLabel, icon: Icon, color }: StatCardProps) => (
   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
-    <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 ${color} opacity-5 rounded-full transition-transform group-hover:scale-125`} />
+    <div className="absolute inset-y-6 start-0 w-px bg-atelier-brass/70" />
     <div className="flex items-center justify-between mb-4">
       <div className={`p-2 ${color} bg-opacity-10 rounded-lg text-current`}>
         <Icon size={20} className={color.replace('bg-', 'text-')} />
@@ -67,7 +68,7 @@ const StatCard = ({ title, value, trend, trendLabel, icon: Icon, color }: StatCa
       )}
     </div>
     <div className="text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1">{title}</div>
-    <div className="text-3xl font-black text-slate-900 leading-tight">{value}</div>
+    <div className="atelier-kpi text-3xl font-extrabold text-slate-900 leading-tight">{value}</div>
   </div>
 );
 
@@ -148,18 +149,7 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
-  if (loading) return (
-    <div className="h-full min-h-[400px] flex items-center justify-center">
-       <div className="text-center space-y-4">
-         <motion.div 
-           animate={{ rotate: 360 }} 
-           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-           className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto"
-         />
-         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregating Shop Intelligence...</p>
-       </div>
-    </div>
-  );
+  if (loading) return <PageShell><div className="space-y-6" aria-label={t('Loading dashboard')}><AtelierSkeleton className="h-28" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <AtelierSkeleton key={index} className="h-36" />)}</div><div className="grid gap-5 xl:grid-cols-2"><AtelierSkeleton className="h-80" /><AtelierSkeleton className="h-80" /></div></div></PageShell>;
 
   if (error) return (
     <div className="h-full flex items-center justify-center p-8">
@@ -236,11 +226,11 @@ export default function Dashboard() {
 
       {/* Quick Actions Scroll */}
       <div id="quick-actions-bar" className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-        <QuickAction icon={ShoppingBag} label={t('Catalog')} color="bg-indigo-600" onClick={() => navigate('/admin/inventory')} />
-        <QuickAction icon={Users} label={t('Clients')} color="bg-slate-900" onClick={() => navigate('/admin/clients')} />
-        <QuickAction icon={TrendingUp} label={t('Reports')} color="bg-blue-600" onClick={() => navigate('/admin/accounting')} />
-        <QuickAction icon={AlertTriangle} label={t('Stock')} color="bg-amber-500" onClick={() => navigate('/admin/inventory')} />
-        <QuickAction icon={Sparkles} label={t('Design Trends')} color="bg-purple-600" onClick={() => navigate('/admin/inventory')} />
+        <QuickAction icon={ShoppingBag} label={t('Catalog')} color="bg-atelier-oxblood" onClick={() => navigate('/admin/inventory')} />
+        <QuickAction icon={Users} label={t('Clients')} color="bg-atelier-ink" onClick={() => navigate('/admin/clients')} />
+        <QuickAction icon={TrendingUp} label={t('Reports')} color="bg-atelier-sage" onClick={() => navigate('/admin/accounting')} />
+        <QuickAction icon={AlertTriangle} label={t('Stock')} color="bg-atelier-brass" onClick={() => navigate('/admin/inventory')} />
+        <QuickAction icon={Sparkles} label={t('Design Trends')} color="bg-atelier-clay" onClick={() => navigate('/admin/inventory')} />
       </div>
 
       {/* Grid of Stats */}
@@ -254,9 +244,9 @@ export default function Dashboard() {
       <div id="charts-and-alerts-grid" className="grid grid-cols-12 gap-6 sm:gap-8">
         {/* Workflow Distribution Chart */}
         <div id="workflow-chart-container" className="col-span-12 lg:col-span-12 xl:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-8 flex flex-col min-h-[400px]">
-           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
               <div>
-                <h2 className="text-xl font-black text-slate-900">{t('Workflow Distribution')}</h2>
+                <h2 className="font-display text-2xl text-slate-900">{t('Workflow Distribution')}</h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Order Pipeline Stages</p>
               </div>
               <div className="flex items-center gap-4">
@@ -267,7 +257,7 @@ export default function Dashboard() {
            <div className="flex-1 min-h-[300px]">
              <ResponsiveContainer width="100%" height="100%">
                <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                 <CartesianGrid strokeDasharray="2 6" vertical={false} stroke="#76634f" opacity={0.2} />
                  <XAxis 
                     dataKey="name" 
                     axisLine={false} 
@@ -293,13 +283,13 @@ export default function Dashboard() {
         {/* Revenue Trend Chart */}
         <div className="col-span-12 lg:col-span-12 xl:col-span-4 bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-8 flex flex-col min-h-[400px]">
           <div className="mb-8">
-            <h2 className="text-xl font-black text-slate-900 truncate">Revenue Inflow</h2>
+            <h2 className="font-display text-2xl text-slate-900 truncate">{t('Revenue Inflow')}</h2>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Cash Performance</p>
           </div>
           <div className="flex-1 min-h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={revenueData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="2 6" vertical={false} stroke="#76634f" opacity={0.2} />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
@@ -311,7 +301,7 @@ export default function Dashboard() {
                 <Tooltip 
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 />
-                <Line type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={4} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="revenue" stroke="#b08d57" strokeWidth={2.5} dot={{ r: 3, fill: '#b08d57', strokeWidth: 2, stroke: '#211b17' }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

@@ -23,6 +23,15 @@ export default defineConfig(() => {
             if (!id.includes('node_modules')) return undefined;
 
             const normalizedId = id.replace(/\\/g, '/');
+            if (normalizedId.includes('/motion/') || normalizedId.includes('/motion-dom/') || normalizedId.includes('/framer-motion/')) {
+              return 'motion-vendor';
+            }
+            if (normalizedId.includes('/i18next/') || normalizedId.includes('/react-i18next/') || normalizedId.includes('/i18next-browser-languagedetector/')) {
+              return 'i18n-vendor';
+            }
+            if (normalizedId.includes('/react-router/') || normalizedId.includes('/react-router-dom/')) {
+              return 'router-vendor';
+            }
             if (normalizedId.includes('/@firebase/firestore/') || normalizedId.includes('/firebase/firestore/')) {
               return 'firebase-firestore';
             }
@@ -45,6 +54,7 @@ export default defineConfig(() => {
       environment: 'jsdom',
       globals: true,
       setupFiles: './src/test/setup.ts',
+      exclude: ['**/node_modules/**', '**/dist/**', 'src/rules-tests/**', 'e2e/**'],
     },
   };
 });

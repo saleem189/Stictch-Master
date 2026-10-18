@@ -12,7 +12,7 @@ export function PageShell({
   maxWidthClassName = 'max-w-[1440px]',
 }: PageShellProps) {
   return (
-    <div className={`w-full px-4 py-5 pb-28 sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-8 ${className}`}>
+    <div className={`w-full px-4 py-5 pb-32 sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-8 ${className}`}>
       <div className={`mx-auto w-full ${maxWidthClassName}`}>
         {children}
       </div>
@@ -32,11 +32,11 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
     <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
         {eyebrow && (
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <p className="text-[10px] font-black uppercase tracking-widest text-atelier-brass">
             {eyebrow}
           </p>
         )}
-        <h1 className="mt-1 text-2xl font-black uppercase italic tracking-tight text-slate-900 sm:text-3xl">
+        <h1 className="font-display mt-1 text-3xl italic tracking-tight text-slate-900 sm:text-4xl">
           {title}
         </h1>
         {description && (
@@ -61,7 +61,7 @@ interface ModuleCardProps {
 
 export function ModuleCard({ children, className = '' }: ModuleCardProps) {
   return (
-    <section className={`rounded-[2rem] border border-slate-200 bg-white shadow-sm sm:rounded-[2.5rem] ${className}`}>
+    <section className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
       {children}
     </section>
   );

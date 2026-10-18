@@ -106,14 +106,14 @@ export function buildDashboardMetrics({
 }
 
 const statusColors: Record<string, string> = {
-  measurement: '#f1f5f9',
-  'fabric-reservation': '#f1f5f9',
-  'pattern-making': '#e2e8f0',
-  cutting: '#cbd5e1',
-  stitching: '#94a3b8',
-  trial: '#64748b',
-  ready: '#4f46e5',
-  delivered: '#10b981',
+  measurement: '#e8dfd2',
+  'fabric-reservation': '#d5c9b9',
+  'pattern-making': '#b08d57',
+  cutting: '#a37470',
+  stitching: '#85555a',
+  trial: '#788677',
+  ready: '#632d35',
+  delivered: '#788677',
 };
 
 function formatMonthName(monthKey: string): string {

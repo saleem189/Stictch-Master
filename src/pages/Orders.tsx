@@ -179,7 +179,7 @@ export default function Orders() {
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
         <div className="overflow-x-auto scrollbar-hide">
           <table className="w-full text-left text-sm min-w-[800px]">
-            <thead className="bg-slate-50/50 border-b border-slate-100">
+            <thead className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50/95 backdrop-blur">
               <tr className="text-[10px] uppercase tracking-widest text-slate-400 font-black">
                 <th className="px-6 py-5 font-serif italic normal-case tracking-normal text-xs">Status & ID</th>
                 <th className="px-6 py-5 font-serif italic normal-case tracking-normal text-xs">Client</th>
@@ -238,6 +238,7 @@ export default function Orders() {
                     <div className="flex items-center justify-end gap-1 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                        <button 
                          onClick={() => sendWhatsApp(order)}
+                         aria-label={`WhatsApp ${order.clientName}`}
                          className="p-2 hover:bg-green-50 rounded-xl text-green-600 transition-all active:scale-90" 
                          title="WhatsApp Client"
                        >
@@ -247,6 +248,7 @@ export default function Orders() {
                          <>
                            <button 
                              onClick={() => sendReminder(order)}
+                             aria-label={`Send payment reminder to ${order.clientName}`}
                              className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-indigo-600 transition-all active:scale-90" 
                              title="Send Reminder"
                            >
@@ -254,6 +256,7 @@ export default function Orders() {
                            </button>
                            <button 
                              onClick={() => setSelectedOrderForPayment(order)}
+                             aria-label={`Record payment for ${order.clientName}`}
                              className="p-2 hover:bg-green-50 rounded-xl text-green-600 transition-all active:scale-90" 
                              title="Record Payment"
                            >
@@ -263,6 +266,7 @@ export default function Orders() {
                        )}
                        <button 
                          onClick={() => printInvoice(order)}
+                         aria-label={`Print invoice for ${order.clientName}`}
                          className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-all active:scale-90" 
                          title="Print Invoice"
                        >
@@ -270,6 +274,7 @@ export default function Orders() {
                        </button>
                        <button 
                          onClick={() => setSelectedOrderDetails(order)}
+                         aria-label={`View order ${order.id.slice(0, 8)}`}
                          className="p-2 hover:bg-indigo-50 rounded-xl text-indigo-600 transition-all active:scale-90" 
                          title="View Details"
                        >

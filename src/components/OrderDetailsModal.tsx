@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { AuditTrailEntry, Order, OrderItem, OrderStatus, OrderWorkflowStatus, Account } from '../types';
@@ -33,13 +33,36 @@ const statusWorkflow: OrderWorkflowStatus[] = [
 ];
 
 export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language.startsWith('ur');
   const { profile } = useUser();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<OrderItem[]>(order.items);
   const [globalStatus, setGlobalStatus] = useState(order.status);
   const [activeTab, setActiveTab] = useState<'workflow' | 'financials' | 'audit'>('workflow');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusable = (): HTMLElement[] => {
+      const elements = drawerRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      return elements ? Array.from(elements) : [];
+    };
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { onClose(); return; }
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      if (!elements.length) { event.preventDefault(); return; }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('keydown', onKeyDown); previousFocus?.focus(); };
+  }, [onClose]);
 
   const handlePayment = async () => {
     if (paymentAmount <= 0) return;
@@ -159,41 +182,48 @@ export default function OrderDetailsModal({ order, onClose, onSuccess }: Props) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end p-4 bg-slate-900/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-atelier-ink/55 backdrop-blur-sm sm:p-4" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
       <motion.div 
-        initial={{ x: '100%' }}
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('Order Details')}
+        initial={{ x: isRtl ? '-100%' : '100%' }}
         animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        className="bg-white w-full max-w-2xl h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        exit={{ x: isRtl ? '-100%' : '100%' }}
+        className="ms-auto flex h-full w-full max-w-2xl flex-col overflow-hidden border-s border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
       >
-        <header className="px-8 py-6 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-atelier-ink px-5 py-5 text-white sm:px-8 sm:py-6">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-               <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic">{t('Intelligence Hub')}</span>
-               <span className="w-1 h-1 bg-slate-700 rounded-full" />
-               <span className="text-[10px] font-bold text-slate-400 uppercase">Order Details</span>
+            <div className="mb-1 flex items-center gap-2">
+               <span className="text-[10px] font-extrabold uppercase tracking-widest text-atelier-brass">{t('The atelier')}</span>
+               <span className="h-1 w-1 rounded-full bg-slate-500" />
+               <span className="text-[10px] font-bold uppercase text-white/55">{t('Order Details')}</span>
             </div>
-            <h2 className="text-xl font-black italic tracking-tight uppercase flex items-center gap-3">
+            <h2 className="font-display flex flex-wrap items-center gap-3 text-2xl">
               #{order.id.slice(0, 8)} 
-              <span className="text-xs font-normal text-slate-500 lowercase not-italic opacity-50 px-2 py-0.5 border border-slate-800 rounded-full">{order.clientName}</span>
+              <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold text-white/65">{order.clientName}</span>
             </h2>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-xl transition-colors">
+          <button type="button" onClick={onClose} aria-label={t('Close panel')} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/15 text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-atelier-brass">
             <X size={24} />
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 space-y-10 scrollbar-hide">
-          <div className="flex bg-slate-100 p-1 rounded-2xl mb-8">
-             {['workflow', 'financials', 'audit'].map((t: string) => (
+        <main className="flex-1 space-y-8 overflow-y-auto p-5 sm:p-8 scrollbar-hide">
+          <div role="tablist" aria-label={t('Order Details')} className="mb-7 flex rounded-xl border border-slate-200 bg-atelier-ivory p-1">
+             {['workflow', 'financials', 'audit'].map((tabKey: string) => (
                 <button
-                  key={t}
-                  onClick={() => setActiveTab(t as 'workflow' | 'financials' | 'audit')}
-                  className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-500'
+                  key={tabKey}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tabKey}
+                  onClick={() => setActiveTab(tabKey as 'workflow' | 'financials' | 'audit')}
+                  className={`min-h-11 flex-1 rounded-lg px-2 text-[10px] font-extrabold uppercase tracking-widest transition-all ${
+                    activeTab === tabKey ? 'bg-white text-atelier-oxblood shadow-sm' : 'text-slate-500 hover:text-slate-900'
                   }`}
                 >
-                  {t}
+                  {tabKey === 'workflow' ? t('Workflow') : tabKey === 'financials' ? t('Financials') : t('Activity')}
                 </button>
              ))}
           </div>

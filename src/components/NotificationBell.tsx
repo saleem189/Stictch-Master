@@ -7,8 +7,10 @@ import { Notification } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import { normalizeNotification } from '../lib/notifications';
+import { useTranslation } from 'react-i18next';
 
 export default function NotificationBell() {
+  const { t } = useTranslation();
   const { user } = useUser();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -42,7 +44,7 @@ export default function NotificationBell() {
       await updateDoc(doc(db, 'notifications', id), { read: true });
     } catch (e) {
       console.error(e);
-      toast.error('Could not update notification.');
+      toast.error(t('Could not update notification.'));
     }
   };
 
@@ -56,10 +58,10 @@ export default function NotificationBell() {
         });
 
       await batch.commit();
-      toast.success('Notifications cleared.');
+      toast.success(t('Notifications cleared.'));
     } catch (e) {
       console.error(e);
-      toast.error('Could not clear notifications.');
+      toast.error(t('Could not clear notifications.'));
     }
   };
 
@@ -75,12 +77,15 @@ export default function NotificationBell() {
   return (
     <div className="relative">
       <button 
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 relative transition-all active:scale-90"
+        aria-label={unreadCount ? t('Notifications, {{count}} unread', { count: unreadCount }) : t('Notifications')}
+        aria-expanded={isOpen}
+        className="grid h-11 w-11 place-items-center rounded-xl text-slate-500 relative transition-all hover:bg-slate-100 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-atelier-brass"
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white">
+          <span className="absolute end-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-atelier-oxblood px-1 text-[9px] font-bold text-white ring-2 ring-white">
             {unreadCount}
           </span>
         )}
@@ -94,26 +99,28 @@ export default function NotificationBell() {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="fixed right-4 left-4 top-16 mt-2 max-h-[calc(100dvh-5rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:w-80 sm:max-h-none"
+              role="region"
+              aria-label={t('Notifications')}
+              className="fixed inset-x-3 top-16 z-50 mt-2 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:end-0 sm:top-auto sm:w-80 sm:max-h-none"
             >
               <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
-                <span className="text-sm font-bold uppercase tracking-widest">Notifications</span>
+                <span className="font-display text-xl">{t('Notifications')}</span>
               </div>
               <div className="max-h-96 overflow-y-auto">
                 {error ? (
                   <div className="p-8 text-center text-red-500">
                     <AlertCircle size={22} className="mx-auto mb-3" />
-                    <p className="text-sm font-bold">{error}</p>
+                    <p className="text-sm font-bold">{t(error)}</p>
                   </div>
                 ) : notifications.length === 0 ? (
                   <div className="p-8 text-center text-slate-400">
-                    <p className="text-sm">No notifications yet.</p>
+                    <p className="text-sm">{t('No notifications yet.')}</p>
                   </div>
                 ) : (
                   notifications.map(notif => (
-                    <div 
+                    <button type="button"
                       key={notif.id} 
-                      className={`p-4 border-b border-slate-100 flex gap-3 hover:bg-slate-50 transition-colors cursor-pointer ${!notif.read ? 'bg-indigo-50/30' : ''}`}
+                      className={`flex w-full gap-3 border-b border-slate-100 p-4 text-start transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-atelier-brass ${!notif.read ? 'bg-indigo-50/30' : ''}`}
                       onClick={() => markAsRead(notif.id)}
                     >
                       <div className="mt-1">{getIcon(notif.type)}</div>
@@ -125,13 +132,13 @@ export default function NotificationBell() {
                         </p>
                       </div>
                       {!notif.read && <div className="w-2 h-2 bg-indigo-500 rounded-full mt-1" />}
-                    </div>
+                    </button>
                   ))
                 )}
               </div>
               {notifications.length > 0 && (
                 <div className="p-3 bg-slate-50 border-t border-slate-100 text-center">
-                   <button onClick={clearAll} className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:underline">Clear all</button>
+                   <button type="button" onClick={clearAll} className="min-h-10 px-3 text-[10px] font-bold text-atelier-oxblood uppercase tracking-widest hover:underline">{t('Mark all as read')}</button>
                 </div>
               )}
             </motion.div>

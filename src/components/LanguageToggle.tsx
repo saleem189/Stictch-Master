@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Languages } from 'lucide-react';
 
 export default function LanguageToggle() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'ur' : 'en';
@@ -11,9 +11,11 @@ export default function LanguageToggle() {
 
   return (
     <button
+      type="button"
       onClick={toggleLanguage}
-      className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 transition-all active:scale-95 group shadow-sm"
-      title={i18n.language === 'en' ? 'Switch to Urdu' : 'Switch to English'}
+      aria-label={i18n.language === 'en' ? t('Switch to Urdu') : t('Switch to English')}
+      className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition-all hover:border-atelier-brass active:scale-95 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-atelier-brass"
+      title={i18n.language === 'en' ? t('Switch to Urdu') : t('Switch to English')}
     >
       <div className="p-1.5 bg-slate-50 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
         <Languages size={14} />
